@@ -13,7 +13,8 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.brandonsprogress.bpfapp"
     },
     "android": {
       "adaptiveIcon": {
@@ -24,6 +25,13 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [],
+    "extra": {
+      "eas": {
+        "projectId": "f53b285c-07ef-4768-a133-6426e0d60066"
+      }
+    },
+    "owner": "brandonsprogress"
   }
 }
