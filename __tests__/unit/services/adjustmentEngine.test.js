@@ -366,16 +366,27 @@ describe('recommendation sorting', () => {
 
 // ─── Fatigue flag ─────────────────────────────────────────────────────────────
 describe('fatigue flag rule', () => {
-  it('fires FATIGUE_FLAG when avg fatigue ≤ 1.5 across 3 check-ins', async () => {
+  function makeSessionsWithEnergy(energyRatings) {
+    return energyRatings.map((energyRating, i) => ({
+      id: `s${i}`,
+      date: `2026-01-${String(i + 1).padStart(2, '0')}T10:00:00.000Z`,
+      splitDayLabel: 'Upper A',
+      startTime: `2026-01-${String(i + 1).padStart(2, '0')}T10:00:00.000Z`,
+      endTime:   `2026-01-${String(i + 1).padStart(2, '0')}T11:00:00.000Z`,
+      energyRating,
+      exercises: [{
+        exerciseId: 'incline_smith_press', discomfortRating: 1,
+        sets: [{ weight: '100', reps: '8', rpe: 8, completedAt: `2026-01-${String(i + 1).padStart(2, '0')}T10:00:00.000Z` }],
+      }],
+    }));
+  }
+
+  it('fires FATIGUE_FLAG when avg session energy ≤ 1.5 across ≥ 3 rated sessions', async () => {
     const program = makeProgram({ currentBlock: 4, trainingAge: 'intermediate' });
     setStorageMocks({
       program,
-      sessions: [],
-      checkIns: [
-        { weekStartDate: '2026-01-05', fatigueRating: 1, nutritionRating: 3, completedAt: new Date().toISOString() },
-        { weekStartDate: '2026-01-12', fatigueRating: 1, nutritionRating: 3, completedAt: new Date().toISOString() },
-        { weekStartDate: '2026-01-19', fatigueRating: 1, nutritionRating: 3, completedAt: new Date().toISOString() },
-      ],
+      sessions: makeSessionsWithEnergy([1, 1, 1]), // all low energy
+      checkIns: [],
     });
 
     const result = await runAdjustmentEngine();
@@ -384,15 +395,24 @@ describe('fatigue flag rule', () => {
     expect(fatigueRec.severity).toBe(SEVERITY.URGENT);
   });
 
-  it('does NOT fire when fatigue is adequate (avg > 1.5)', async () => {
+  it('does NOT fire when avg session energy > 1.5', async () => {
     const program = makeProgram({ currentBlock: 4 });
     setStorageMocks({
       program,
-      sessions: [],
-      checkIns: [
-        { weekStartDate: '2026-01-05', fatigueRating: 2, nutritionRating: 3, completedAt: new Date().toISOString() },
-        { weekStartDate: '2026-01-12', fatigueRating: 3, nutritionRating: 3, completedAt: new Date().toISOString() },
-      ],
+      sessions: makeSessionsWithEnergy([2, 3, 2]), // adequate energy
+      checkIns: [],
+    });
+
+    const result = await runAdjustmentEngine();
+    expect(result.recommendations.find(r => r.type === REC_TYPES.FATIGUE_FLAG)).toBeUndefined();
+  });
+
+  it('does NOT fire with fewer than 3 rated sessions', async () => {
+    const program = makeProgram({ currentBlock: 4 });
+    setStorageMocks({
+      program,
+      sessions: makeSessionsWithEnergy([1, 1]), // only 2 sessions
+      checkIns: [],
     });
 
     const result = await runAdjustmentEngine();
@@ -407,17 +427,11 @@ describe('fatigue flag rule', () => {
     ];
     const sessions = dates.map((date, i) => ({
       id: `s${i}`, date, splitDayLabel: 'Upper A', startTime: date, endTime: date,
+      energyRating: 1,
       exercises: [{ exerciseId: 'incline_smith_press', discomfortRating: 1,
         sets: [{ weight: '100', reps: '1', rpe: 7, completedAt: date }] }],
     }));
-    setStorageMocks({
-      program, sessions,
-      checkIns: [
-        { weekStartDate: '2026-01-05', fatigueRating: 1, nutritionRating: 3, completedAt: new Date().toISOString() },
-        { weekStartDate: '2026-01-12', fatigueRating: 1, nutritionRating: 3, completedAt: new Date().toISOString() },
-        { weekStartDate: '2026-01-19', fatigueRating: 1, nutritionRating: 3, completedAt: new Date().toISOString() },
-      ],
-    });
+    setStorageMocks({ program, sessions, checkIns: [] });
 
     const result = await runAdjustmentEngine();
     expect(result.recommendations.find(r => r.type === REC_TYPES.FATIGUE_FLAG)).toBeDefined();

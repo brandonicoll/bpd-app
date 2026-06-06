@@ -4,7 +4,7 @@ import {
   SafeAreaView, ActivityIndicator, useWindowDimensions,
 } from 'react-native';
 import { colors, spacing, fontSizes, borderRadius } from '../../theme';
-import { getExerciseProgressTrend, getCustomExercises } from '../../services/storage';
+import { getExerciseProgressTrend, getCustomExercises, getWeightUnit } from '../../services/storage';
 import { exercises as exerciseLibrary } from '../../data/exercises';
 import { JOINT_ACTION_LABELS } from '../../data/jointActionLabels';
 import SimpleLineChart from '../../components/common/SimpleLineChart';
@@ -21,6 +21,11 @@ export default function ExerciseDetailScreen({ navigation, route }) {
   );
   const [progressData, setProgressData] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [weightUnit, setWeightUnit] = useState('lbs');
+
+  useEffect(() => {
+    getWeightUnit().then(setWeightUnit);
+  }, []);
 
   useLayoutEffect(() => {
     if (exerciseDef) {
@@ -92,13 +97,13 @@ export default function ExerciseDetailScreen({ navigation, route }) {
         {chartData.length > 0 && (
           <View style={styles.statsRow}>
             <View style={styles.statBox}>
-              <Text style={styles.statValue}>{bestE1RM}kg</Text>
+              <Text style={styles.statValue}>{bestE1RM}{weightUnit}</Text>
               <Text style={styles.statLabel}>Best est. 1RM</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statBox}>
               <Text style={[styles.statValue, progressDelta >= 0 ? styles.positive : styles.negative]}>
-                {progressDelta >= 0 ? '+' : ''}{progressDelta}kg
+                {progressDelta >= 0 ? '+' : ''}{progressDelta}{weightUnit}
               </Text>
               <Text style={styles.statLabel}>Over {chartData.length} sessions</Text>
             </View>
@@ -113,7 +118,7 @@ export default function ExerciseDetailScreen({ navigation, route }) {
         {/* Discomfort warning */}
         {hasDiscomfortFlag && (
           <View style={styles.discomfortAlert}>
-            <Text style={styles.discomfortAlertTitle}>😬 Recurring discomfort flagged</Text>
+            <Text style={styles.discomfortAlertTitle}>Recurring discomfort flagged</Text>
             <Text style={styles.discomfortAlertBody}>
               You've reported joint discomfort on this movement in recent sessions. Consider swapping it during your next optimization window (weeks 11–12).
             </Text>
@@ -133,7 +138,7 @@ export default function ExerciseDetailScreen({ navigation, route }) {
             />
           )}
           <Text style={styles.chartNote}>
-            Estimated 1RM = weight × (1 + reps/30). Higher is better.
+            Estimated 1RM = weight × (1 + reps/30). Shown in {weightUnit}.
           </Text>
         </View>
 
@@ -151,15 +156,17 @@ export default function ExerciseDetailScreen({ navigation, route }) {
                   <View style={styles.historyLeft}>
                     <Text style={styles.historyDate}>{relativeDateLabel(session.date)}</Text>
                     <Text style={styles.historyData}>
-                      {formatWeight(session.bestWeight)}kg × {session.bestReps} reps
+                      {formatWeight(session.bestWeight)}{weightUnit} × {session.bestReps} reps
                       {session.avgRPE ? ` · RPE ${session.avgRPE.toFixed(1)}` : ''}
                     </Text>
                   </View>
                   <View style={styles.historyRight}>
-                    <Text style={styles.historyE1RM}>{session.e1RM}kg</Text>
+                    <Text style={styles.historyE1RM}>{session.e1RM}{weightUnit}</Text>
                     <Text style={styles.historyE1RMLabel}>est. 1RM</Text>
                     {discomfort && (
-                      <Text style={styles.historyDiscomfort}>{discomfort.emoji}</Text>
+                      <Text style={[styles.historyDiscomfort, { color: discomfort.color }]}>
+                        {discomfort.label}
+                      </Text>
                     )}
                   </View>
                 </View>

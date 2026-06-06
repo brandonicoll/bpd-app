@@ -2,6 +2,7 @@ import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import InsightsScreen from '../screens/insights/InsightsScreen';
 import AdjustmentDetailScreen from '../screens/insights/AdjustmentDetailScreen';
+import ExerciseDetailScreen from '../screens/program/ExerciseDetailScreen';
 import { colors } from '../theme';
 
 const Stack = createNativeStackNavigator();
@@ -18,8 +19,21 @@ export default function InsightsStack() {
         headerBackTitle: 'Back',
       }}
     >
-      <Stack.Screen name="Insights" component={InsightsScreen} options={{ headerShown: false }} />
-      <Stack.Screen name="AdjustmentDetail" component={AdjustmentDetailScreen} options={{ title: 'Recommendation' }} />
+      <Stack.Screen
+        name="Insights"
+        component={InsightsScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="AdjustmentDetail"
+        component={AdjustmentDetailScreen}
+        options={{ title: 'Recommendation' }}
+      />
+      <Stack.Screen
+        name="ExerciseDetailFromInsights"
+        component={ExerciseDetailScreen}
+        options={{ title: 'Exercise detail' }}
+      />
     </Stack.Navigator>
   );
 }

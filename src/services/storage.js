@@ -85,6 +85,14 @@ export async function saveSession(session) {
   return setItem(KEYS.SESSIONS, sessions);
 }
 
+export async function updateSession(sessionId, updates) {
+  const sessions = await getAllSessions();
+  const idx = sessions.findIndex(s => s.id === sessionId);
+  if (idx < 0) return false;
+  sessions[idx] = { ...sessions[idx], ...updates };
+  return setItem(KEYS.SESSIONS, sessions);
+}
+
 export async function getSessionsByDateRange(startDate, endDate) {
   const sessions = await getAllSessions();
   return sessions.filter(s => {
@@ -283,6 +291,34 @@ export async function deleteCustomExercise(id) {
   return setItem(CUSTOM_EXERCISES_KEY, existing.filter(e => e.id !== id));
 }
 
+// Add an exercise to a split day
+export async function addExerciseToProgram(dayLabel, exerciseId, exerciseConfig) {
+  const program = await getCurrentProgram();
+  if (!program) return false;
+
+  const updatedSplitDays = program.splitDays.map(day => {
+    if (day.dayLabel !== dayLabel) return day;
+    if (day.exercises.some(e => e.exerciseId === exerciseId)) return day;
+    return { ...day, exercises: [...day.exercises, exerciseConfig] };
+  });
+
+  return saveCurrentProgram({ ...program, splitDays: updatedSplitDays });
+}
+
+// Remove an exercise from a split day (guards against emptying a day)
+export async function removeExerciseFromProgram(dayLabel, exerciseId) {
+  const program = await getCurrentProgram();
+  if (!program) return false;
+
+  const updatedSplitDays = program.splitDays.map(day => {
+    if (day.dayLabel !== dayLabel) return day;
+    if (day.exercises.length <= 1) return day;
+    return { ...day, exercises: day.exercises.filter(e => e.exerciseId !== exerciseId) };
+  });
+
+  return saveCurrentProgram({ ...program, splitDays: updatedSplitDays });
+}
+
 // Move an exercise up or down within a split day
 export async function reorderExerciseInProgram(dayLabel, exerciseId, direction) {
   const program = await getCurrentProgram();
@@ -300,6 +336,18 @@ export async function reorderExerciseInProgram(dayLabel, exerciseId, direction) 
   });
 
   return saveCurrentProgram({ ...program, splitDays: updatedSplitDays });
+}
+
+// ─── Weight unit preference ────────────────────────────────────
+const WEIGHT_UNIT_KEY = 'weightUnit';
+
+export async function getWeightUnit() {
+  const unit = await AsyncStorage.getItem(WEIGHT_UNIT_KEY);
+  return unit || 'lbs';
+}
+
+export async function saveWeightUnit(unit) {
+  await AsyncStorage.setItem(WEIGHT_UNIT_KEY, unit);
 }
 
 // ─── Clear all data (dev/testing only) ────────────────────────

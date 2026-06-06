@@ -6,27 +6,35 @@ import {
 } from 'react-native';
 import 'react-native-get-random-values';
 import { v4 as uuidv4 } from 'uuid';
-import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, fontSizes, borderRadius } from '../../theme';
-import { saveSession, getLastSessionForExercise, updateStreak } from '../../services/storage';
+import {
+  saveSession,
+  getLastSessionForExercise,
+  updateStreak,
+  getWeightUnit,
+  saveWeightUnit,
+} from '../../services/storage';
 import { exercises as exerciseLibrary } from '../../data/exercises';
 import {
+  calculateTotalVolume,
+  getBestE1RM,
   formatWeight,
   DISCOMFORT_OPTIONS,
   getExerciseRPEGuidance,
 } from '../../utils/workoutHelpers';
 import { relativeDateLabel, getWeekStart } from '../../utils/dateHelpers';
 
-// ─── RPE Selector sub-component ──────────────────────────────────────────────
+// ─── RPE Selector (per set) ───────────────────────────────────────────────────
 const RPE_OPTIONS = [6, 7, 8, 9, 10];
 
 function RPESelector({ value, onChange }) {
   return (
     <View style={rpeStyles.row}>
+      <Text style={rpeStyles.label}>RPE</Text>
       {RPE_OPTIONS.map(rpe => (
         <TouchableOpacity
           key={rpe}
-          onPress={() => onChange(rpe)}
+          onPress={() => onChange(rpe === value ? null : rpe)}
           activeOpacity={0.7}
           style={[rpeStyles.chip, value === rpe && rpeStyles.chipSelected]}
         >
@@ -40,11 +48,23 @@ function RPESelector({ value, onChange }) {
 }
 
 const rpeStyles = StyleSheet.create({
-  row: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: 6,
+    paddingLeft: 36,
+  },
+  label: {
+    fontSize: fontSizes.xs,
+    color: colors.textTertiary,
+    fontWeight: '500',
+    marginRight: 2,
+  },
   chip: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 34,
+    height: 28,
+    borderRadius: 14,
     borderWidth: 1.5,
     borderColor: colors.border,
     alignItems: 'center',
@@ -52,20 +72,19 @@ const rpeStyles = StyleSheet.create({
     backgroundColor: colors.surface,
   },
   chipSelected: { borderColor: colors.primary, backgroundColor: colors.primaryLight },
-  chipText: { fontSize: fontSizes.sm, fontWeight: '600', color: colors.textSecondary },
+  chipText: { fontSize: fontSizes.xs, fontWeight: '600', color: colors.textSecondary },
   chipTextSelected: { color: colors.primary },
 });
 
-// ─── Set row sub-component ────────────────────────────────────────────────────
-function SetRow({ setNumber, set, onUpdate, onDelete }) {
+// ─── Set Row ──────────────────────────────────────────────────────────────────
+function SetRow({ setNumber, set, weightUnit, onUpdate, onDelete }) {
   return (
-    <View style={setStyles.row}>
-      <View style={setStyles.setNum}>
-        <Text style={setStyles.setNumText}>{setNumber}</Text>
-      </View>
+    <View style={setStyles.container}>
+      <View style={setStyles.row}>
+        <View style={setStyles.setNum}>
+          <Text style={setStyles.setNumText}>{setNumber}</Text>
+        </View>
 
-      <View style={setStyles.inputs}>
-        {/* Weight */}
         <View style={setStyles.inputGroup}>
           <Text style={setStyles.inputLabel}>Weight</Text>
           <View style={setStyles.inputWrap}>
@@ -78,11 +97,10 @@ function SetRow({ setNumber, set, onUpdate, onDelete }) {
               placeholderTextColor={colors.textTertiary}
               returnKeyType="next"
             />
-            <Text style={setStyles.inputUnit}>kg</Text>
+            <Text style={setStyles.inputUnit}>{weightUnit}</Text>
           </View>
         </View>
 
-        {/* Reps */}
         <View style={setStyles.inputGroup}>
           <Text style={setStyles.inputLabel}>Reps</Text>
           <View style={setStyles.inputWrap}>
@@ -97,22 +115,28 @@ function SetRow({ setNumber, set, onUpdate, onDelete }) {
             />
           </View>
         </View>
+
+        <TouchableOpacity onPress={onDelete} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          <Text style={setStyles.deleteIcon}>✕</Text>
+        </TouchableOpacity>
       </View>
 
-      {/* Delete set */}
-      <TouchableOpacity onPress={onDelete} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-        <Ionicons name="close" size={18} color={colors.textTertiary} />
-      </TouchableOpacity>
+      <RPESelector value={set.rpe} onChange={rpe => onUpdate('rpe', rpe)} />
     </View>
   );
 }
 
 const setStyles = StyleSheet.create({
+  container: {
+    marginBottom: spacing.sm,
+    paddingBottom: spacing.sm,
+    borderBottomWidth: 0.5,
+    borderBottomColor: colors.border,
+  },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    marginBottom: spacing.xs,
   },
   setNum: {
     width: 28,
@@ -124,7 +148,6 @@ const setStyles = StyleSheet.create({
     flexShrink: 0,
   },
   setNumText: { fontSize: fontSizes.xs, fontWeight: '700', color: colors.textSecondary },
-  inputs: { flex: 1, flexDirection: 'row', gap: spacing.sm },
   inputGroup: { flex: 1 },
   inputLabel: {
     fontSize: fontSizes.xs,
@@ -153,9 +176,9 @@ const setStyles = StyleSheet.create({
   deleteIcon: { fontSize: 16, color: colors.textTertiary, paddingHorizontal: 4 },
 });
 
-// ─── Exercise card sub-component ──────────────────────────────────────────────
+// ─── Exercise Card ────────────────────────────────────────────────────────────
 function ExerciseCard({
-  exerciseData, exerciseDef, exConfig, currentBlock,
+  exerciseData, exerciseDef, exConfig, currentBlock, weightUnit,
   previousData, onSetUpdate, onSetAdd, onSetDelete, onDiscomfortChange,
 }) {
   const { sets, discomfortRating } = exerciseData;
@@ -163,19 +186,15 @@ function ExerciseCard({
 
   return (
     <View style={exStyles.card}>
-      {/* Exercise header */}
       <View style={exStyles.header}>
-        <View style={exStyles.headerLeft}>
-          <Text style={exStyles.name}>{exerciseDef.name}</Text>
-          <Text style={exStyles.range}>
-            {exConfig
-              ? `${exConfig.sets} sets · ${exConfig.repRange[0]}–${exConfig.repRange[1]} reps`
-              : `${exerciseDef.defaultRepRange[0]}–${exerciseDef.defaultRepRange[1]} reps`}
-          </Text>
-        </View>
+        <Text style={exStyles.name}>{exerciseDef.name}</Text>
+        <Text style={exStyles.range}>
+          {exConfig
+            ? `${exConfig.sets} sets · ${exConfig.repRange[0]}–${exConfig.repRange[1]} reps`
+            : `${exerciseDef.defaultRepRange[0]}–${exerciseDef.defaultRepRange[1]} reps`}
+        </Text>
       </View>
 
-      {/* RPE guidance banner */}
       <View style={[exStyles.rpeBanner, { backgroundColor: rpeGuidance.color + '18', borderLeftColor: rpeGuidance.color }]}>
         <View style={exStyles.rpeBannerTop}>
           <Text style={[exStyles.rpeBannerTarget, { color: rpeGuidance.color }]}>
@@ -184,7 +203,9 @@ function ExerciseCard({
               : `Target: ${rpeGuidance.label}`}
           </Text>
           {rpeGuidance.mode !== 'prescribed' && rpeGuidance.prescribedRPE && (
-            <Text style={exStyles.rpeBannerPrescribed}>Prescribed: RPE {rpeGuidance.prescribedRPE}</Text>
+            <Text style={exStyles.rpeBannerPrescribed}>
+              Prescribed: RPE {rpeGuidance.prescribedRPE}
+            </Text>
           )}
         </View>
         {rpeGuidance.mode !== 'prescribed' && (
@@ -194,77 +215,51 @@ function ExerciseCard({
         )}
       </View>
 
-      {/* Previous session data */}
       {previousData && previousData.sets?.length > 0 && (
         <View style={exStyles.prevRow}>
-          <Text style={exStyles.prevLabel}>Last session ({relativeDateLabel(previousData.date)}):</Text>
+          <Text style={exStyles.prevLabel}>
+            Last session ({relativeDateLabel(previousData.date)}):
+          </Text>
           <Text style={exStyles.prevValue}>
-            {formatWeight(previousData.sets[0]?.weight)}kg × {previousData.sets[0]?.reps} reps
+            {formatWeight(previousData.sets[0]?.weight)} {weightUnit} × {previousData.sets[0]?.reps} reps
             {previousData.sets.length > 1 ? ` (+${previousData.sets.length - 1} more)` : ''}
           </Text>
         </View>
       )}
 
-      {/* Column headers */}
-      {sets.length > 0 && (
-        <View style={exStyles.colHeaders}>
-          <View style={{ width: 28 }} />
-          <Text style={exStyles.colHeader}>Weight (kg)</Text>
-          <Text style={exStyles.colHeader}>Reps</Text>
-          <View style={{ width: 24 }} />
-        </View>
-      )}
-
-      {/* Set rows */}
       {sets.map((set, setIndex) => (
         <SetRow
           key={setIndex}
           setNumber={setIndex + 1}
           set={set}
+          weightUnit={weightUnit}
           onUpdate={(field, value) => onSetUpdate(setIndex, field, value)}
           onDelete={() => onSetDelete(setIndex)}
         />
       ))}
 
-      {/* Add set */}
       <TouchableOpacity onPress={onSetAdd} style={exStyles.addSetBtn} activeOpacity={0.7}>
         <Text style={exStyles.addSetText}>+ Add set</Text>
       </TouchableOpacity>
 
-      {/* RPE selector */}
-      {sets.length > 0 && (
-        <View style={exStyles.rpeSection}>
-          <Text style={exStyles.rpeSectionLabel}>
-            RPE for last set
-            <Text style={exStyles.rpeSectionHint}> (reps left in the tank?)</Text>
-          </Text>
-          <RPESelector
-            value={sets[sets.length - 1]?.rpe}
-            onChange={rpe => onSetUpdate(sets.length - 1, 'rpe', rpe)}
-          />
-        </View>
-      )}
-
-      {/* Discomfort rating */}
       <View style={exStyles.discomfortSection}>
         <Text style={exStyles.discomfortLabel}>How did this feel on your joints?</Text>
         <View style={exStyles.discomfortRow}>
           {DISCOMFORT_OPTIONS.map(opt => (
             <TouchableOpacity
               key={opt.value}
-              onPress={() => onDiscomfortChange(opt.value)}
+              onPress={() => onDiscomfortChange(discomfortRating === opt.value ? null : opt.value)}
               activeOpacity={0.75}
               style={[
                 exStyles.discomfortChip,
                 discomfortRating === opt.value && { backgroundColor: opt.bg, borderColor: opt.color },
               ]}
             >
-              <Text style={exStyles.discomfortEmoji}>{opt.emoji}</Text>
               <Text style={[
-                exStyles.discomfortChipLabel,
+                exStyles.discomfortChipText,
                 discomfortRating === opt.value && { color: opt.color },
               ]}>
-                {opt.label}
+                {opt.shortLabel}
               </Text>
             </TouchableOpacity>
           ))}
@@ -281,8 +276,7 @@ const exStyles = StyleSheet.create({
     padding: spacing.md,
     marginBottom: spacing.md,
   },
-  header: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: spacing.sm },
-  headerLeft: { flex: 1 },
+  header: { marginBottom: spacing.sm },
   name: { fontSize: fontSizes.lg, fontWeight: '700', color: colors.text, marginBottom: 2 },
   range: { fontSize: fontSizes.xs, color: colors.textSecondary },
   rpeBanner: {
@@ -309,18 +303,6 @@ const exStyles = StyleSheet.create({
   },
   prevLabel: { fontSize: fontSizes.xs, color: colors.primary, fontWeight: '600', marginBottom: 1 },
   prevValue: { fontSize: fontSizes.sm, color: colors.primaryDark, fontWeight: '500' },
-  colHeaders: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginBottom: 4,
-  },
-  colHeader: {
-    flex: 1,
-    fontSize: fontSizes.xs,
-    color: colors.textTertiary,
-    fontWeight: '500',
-  },
   addSetBtn: {
     paddingVertical: spacing.sm,
     alignItems: 'center',
@@ -332,9 +314,6 @@ const exStyles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   addSetText: { fontSize: fontSizes.sm, color: colors.primary, fontWeight: '600' },
-  rpeSection: { marginBottom: spacing.md },
-  rpeSectionLabel: { fontSize: fontSizes.xs, fontWeight: '600', color: colors.textSecondary, marginBottom: spacing.sm },
-  rpeSectionHint: { fontWeight: '400', color: colors.textTertiary },
   discomfortSection: {
     borderTopWidth: 0.5,
     borderTopColor: colors.border,
@@ -350,14 +329,16 @@ const exStyles = StyleSheet.create({
   discomfortChip: {
     flex: 1,
     alignItems: 'center',
-    paddingVertical: spacing.sm,
+    paddingVertical: 9,
     borderRadius: borderRadius.md,
     borderWidth: 1.5,
     borderColor: colors.border,
-    gap: 3,
   },
-  discomfortEmoji: { fontSize: 20 },
-  discomfortChipLabel: { fontSize: 10, fontWeight: '600', color: colors.textSecondary, textAlign: 'center' },
+  discomfortChipText: {
+    fontSize: fontSizes.xs,
+    fontWeight: '700',
+    color: colors.textSecondary,
+  },
 });
 
 // ─── ActiveWorkoutScreen ──────────────────────────────────────────────────────
@@ -365,42 +346,55 @@ export default function ActiveWorkoutScreen({ navigation, route }) {
   const { splitDay, currentBlock = 1 } = route.params;
 
   const startTime = useRef(new Date().toISOString());
+  const [weightUnit, setWeightUnitState] = useState('lbs');
+  const [previousData, setPreviousData] = useState({});
+  const [finishing, setFinishing] = useState(false);
+
   const [sessionExercises, setSessionExercises] = useState(
     splitDay.exercises.map(exConfig => ({
       exerciseId: exConfig.exerciseId,
       exConfig,
       discomfortRating: null,
-      sets: [],
+      sets: Array.from({ length: exConfig.sets || 2 }, () => ({
+        weight: '',
+        reps: '',
+        rpe: null,
+        completedAt: new Date().toISOString(),
+      })),
     }))
   );
-  const [previousData, setPreviousData] = useState({});
-  const [finishing, setFinishing] = useState(false);
 
-  // Load previous session data for each exercise
   useEffect(() => {
-    async function loadPrevious() {
+    async function load() {
+      const unit = await getWeightUnit();
+      setWeightUnitState(unit);
+
       const results = {};
       for (const exConfig of splitDay.exercises) {
-        const exerciseId = exConfig.exerciseId;
-        const prev = await getLastSessionForExercise(exerciseId);
-        if (prev) results[exerciseId] = prev;
+        const prev = await getLastSessionForExercise(exConfig.exerciseId);
+        if (prev) results[exConfig.exerciseId] = prev;
       }
       setPreviousData(results);
     }
-    loadPrevious();
+    load();
   }, []);
 
+  async function toggleWeightUnit() {
+    const newUnit = weightUnit === 'lbs' ? 'kg' : 'lbs';
+    setWeightUnitState(newUnit);
+    await saveWeightUnit(newUnit);
+  }
+
   function updateSet(exerciseIndex, setIndex, field, value) {
-    setSessionExercises(prev => {
-      const updated = prev.map((ex, i) => {
+    setSessionExercises(prev =>
+      prev.map((ex, i) => {
         if (i !== exerciseIndex) return ex;
-        const updatedSets = ex.sets.map((s, j) =>
-          j === setIndex ? { ...s, [field]: value } : s
-        );
-        return { ...ex, sets: updatedSets };
-      });
-      return updated;
-    });
+        return {
+          ...ex,
+          sets: ex.sets.map((s, j) => j === setIndex ? { ...s, [field]: value } : s),
+        };
+      })
+    );
   }
 
   function addSet(exerciseIndex) {
@@ -425,15 +419,12 @@ export default function ActiveWorkoutScreen({ navigation, route }) {
   }
 
   function deleteSet(exerciseIndex, setIndex) {
-    setSessionExercises(prev => {
-      const updated = [...prev];
-      const ex = updated[exerciseIndex];
-      updated[exerciseIndex] = {
-        ...ex,
-        sets: ex.sets.filter((_, j) => j !== setIndex),
-      };
-      return updated;
-    });
+    setSessionExercises(prev =>
+      prev.map((ex, i) => {
+        if (i !== exerciseIndex) return ex;
+        return { ...ex, sets: ex.sets.filter((_, j) => j !== setIndex) };
+      })
+    );
   }
 
   function updateDiscomfort(exerciseIndex, rating) {
@@ -443,24 +434,14 @@ export default function ActiveWorkoutScreen({ navigation, route }) {
   }
 
   async function handleFinish() {
-    const emptyExercises = sessionExercises.filter(ex => ex.sets.length === 0);
+    const hasAnySets = sessionExercises.some(ex =>
+      ex.sets.some(s => s.weight || s.reps)
+    );
 
-    if (emptyExercises.length > 0 && sessionExercises.some(ex => ex.sets.length > 0)) {
-      Alert.alert(
-        'Some exercises have no sets',
-        "You haven't logged any sets for some exercises. Finish anyway?",
-        [
-          { text: 'Go back', style: 'cancel' },
-          { text: 'Finish anyway', onPress: () => saveAndNavigate() },
-        ]
-      );
-      return;
-    }
-
-    if (sessionExercises.every(ex => ex.sets.length === 0)) {
+    if (!hasAnySets) {
       Alert.alert(
         'No sets logged',
-        "You haven't logged any sets. Are you sure you want to finish?",
+        "You haven't entered any weight or reps yet. Are you sure you want to finish?",
         [
           { text: 'Keep going', style: 'cancel' },
           { text: 'End session', onPress: () => navigation.goBack() },
@@ -469,10 +450,6 @@ export default function ActiveWorkoutScreen({ navigation, route }) {
       return;
     }
 
-    await saveAndNavigate();
-  }
-
-  async function saveAndNavigate() {
     setFinishing(true);
     try {
       const endTime = new Date().toISOString();
@@ -482,23 +459,21 @@ export default function ActiveWorkoutScreen({ navigation, route }) {
         splitDayLabel: splitDay.dayLabel,
         startTime: startTime.current,
         endTime,
-        exercises: sessionExercises.filter(ex => ex.sets.length > 0),
+        weightUnit,
+        exercises: sessionExercises.filter(ex => ex.sets.some(s => s.weight || s.reps)),
       };
 
       await saveSession(session);
 
       const weekStart = getWeekStart().toISOString().split('T')[0];
-      await updateStreak({
-        weekStartDate: weekStart,
-        completed: 1,
-        planned: 1,
-      });
+      await updateStreak({ weekStartDate: weekStart, planned: 1 });
 
       navigation.replace('SessionSummary', {
         session,
         splitDay,
         startTime: startTime.current,
         endTime,
+        weightUnit,
       });
     } catch (e) {
       console.error('Error saving session:', e);
@@ -512,9 +487,7 @@ export default function ActiveWorkoutScreen({ navigation, route }) {
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={0}
       >
-        {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity
             onPress={() => Alert.alert(
@@ -527,11 +500,14 @@ export default function ActiveWorkoutScreen({ navigation, route }) {
             )}
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
-            <Ionicons name="close" size={24} color={colors.text} />
+            <Text style={styles.closeBtn}>✕</Text>
           </TouchableOpacity>
 
           <View style={styles.headerCenter}>
             <Text style={styles.headerTitle}>{splitDay.dayLabel}</Text>
+            <TouchableOpacity onPress={toggleWeightUnit} style={styles.unitToggle} activeOpacity={0.7}>
+              <Text style={styles.unitToggleText}>{weightUnit}</Text>
+            </TouchableOpacity>
           </View>
 
           <TouchableOpacity
@@ -540,15 +516,12 @@ export default function ActiveWorkoutScreen({ navigation, route }) {
             style={styles.finishBtn}
             activeOpacity={0.8}
           >
-            {finishing ? (
-              <ActivityIndicator color="#fff" size="small" />
-            ) : (
-              <Text style={styles.finishBtnText}>Finish</Text>
-            )}
+            {finishing
+              ? <ActivityIndicator color="#fff" size="small" />
+              : <Text style={styles.finishBtnText}>Finish</Text>}
           </TouchableOpacity>
         </View>
 
-        {/* Exercises */}
         <ScrollView
           style={styles.scroll}
           contentContainerStyle={styles.scrollContent}
@@ -565,6 +538,7 @@ export default function ActiveWorkoutScreen({ navigation, route }) {
                 exerciseDef={exDef}
                 exConfig={exData.exConfig}
                 currentBlock={currentBlock}
+                weightUnit={weightUnit}
                 previousData={previousData[exData.exerciseId]}
                 onSetUpdate={(setIndex, field, value) => updateSet(exIndex, setIndex, field, value)}
                 onSetAdd={() => addSet(exIndex)}
@@ -574,7 +548,6 @@ export default function ActiveWorkoutScreen({ navigation, route }) {
             );
           })}
 
-          {/* Bottom finish button */}
           <TouchableOpacity
             onPress={handleFinish}
             disabled={finishing}
@@ -603,9 +576,22 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
     backgroundColor: colors.background,
   },
-  headerCenter: { flex: 1, alignItems: 'center' },
+  headerCenter: {
+    flex: 1,
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: spacing.sm,
+  },
   headerTitle: { fontSize: fontSizes.lg, fontWeight: '700', color: colors.text },
-  backArrow: { fontSize: 18, color: colors.textSecondary, width: 32 },
+  unitToggle: {
+    backgroundColor: colors.primaryLight,
+    borderRadius: borderRadius.full,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  unitToggleText: { fontSize: fontSizes.xs, fontWeight: '700', color: colors.primary },
+  closeBtn: { fontSize: 18, color: colors.textSecondary, width: 32 },
   finishBtn: {
     backgroundColor: colors.primary,
     borderRadius: borderRadius.md,

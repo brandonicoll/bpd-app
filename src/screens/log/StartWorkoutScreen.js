@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View, Text, StyleSheet, ScrollView,
   TouchableOpacity, SafeAreaView, ActivityIndicator,
@@ -22,21 +23,22 @@ export default function StartWorkoutScreen({ navigation, route }) {
   const [selectedDay, setSelectedDay] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    async function load() {
-      const p = await getCurrentProgram();
-      setProgram(p);
-      // Pre-select the day passed from Home, or default to first day
-      if (preselectedDay) {
-        const found = p?.splitDays.find(d => d.dayLabel === preselectedDay.dayLabel);
-        setSelectedDay(found || p?.splitDays[0] || null);
-      } else {
-        setSelectedDay(p?.splitDays[0] || null);
+  useFocusEffect(
+    useCallback(() => {
+      async function load() {
+        const p = await getCurrentProgram();
+        setProgram(p);
+        if (preselectedDay) {
+          const found = p?.splitDays.find(d => d.dayLabel === preselectedDay.dayLabel);
+          setSelectedDay(found || p?.splitDays[0] || null);
+        } else {
+          setSelectedDay(p?.splitDays[0] || null);
+        }
+        setIsLoading(false);
       }
-      setIsLoading(false);
-    }
-    load();
-  }, []);
+      load();
+    }, [])
+  );
 
   if (isLoading) {
     return (

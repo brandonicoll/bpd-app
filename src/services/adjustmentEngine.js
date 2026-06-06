@@ -59,15 +59,16 @@ function getAvgRPEForExercise(exerciseId, allSessions, lastN = 4) {
   return allRPEs.reduce((a, b) => a + b, 0) / allRPEs.length;
 }
 
-// ─── Helper: avg fatigue from recent check-ins ────────────────────────────────
-function getAvgFatigueFromCheckIns(checkIns, lastN = 3) {
-  const recent = checkIns
-    .filter(c => c.fatigueRating != null)
-    .sort((a, b) => new Date(b.weekStartDate) - new Date(a.weekStartDate))
+// ─── Helper: avg energy from session energy ratings ──────────────────────────
+// Returns null if fewer than 3 sessions have been rated
+function getAvgEnergyFromSessions(allSessions, lastN = 8) {
+  const recentRated = allSessions
+    .filter(s => s.energyRating != null)
+    .sort((a, b) => new Date(b.date) - new Date(a.date))
     .slice(0, lastN);
 
-  if (!recent.length) return null;
-  return recent.reduce((sum, c) => sum + c.fatigueRating, 0) / recent.length;
+  if (recentRated.length < 3) return null;
+  return recentRated.reduce((sum, s) => sum + s.energyRating, 0) / recentRated.length;
 }
 
 // ─── Joint action metrics ─────────────────────────────────────────────────────
@@ -258,16 +259,13 @@ function checkNutritionFlag(checkIns) {
 }
 
 // ─── Rule: Fatigue flag ───────────────────────────────────────────────────────
-function checkFatigueFlag(checkIns) {
-  const avgFatigue = getAvgFatigueFromCheckIns(checkIns, 3);
-  if (avgFatigue === null) return null;
+function checkFatigueFlag(allSessions) {
+  const avgEnergy  = getAvgEnergyFromSessions(allSessions);
+  if (avgEnergy === null) return null;
 
-  const recent = checkIns
-    .filter(c => c.fatigueRating != null)
-    .sort((a, b) => new Date(b.weekStartDate) - new Date(a.weekStartDate))
-    .slice(0, 3);
+  const ratedCount = allSessions.filter(s => s.energyRating != null).length;
 
-  if (avgFatigue <= 1.5 && recent.length >= 2) {
+  if (avgEnergy <= 1.5) {
     return {
       id: 'fatigue-flag',
       type: REC_TYPES.FATIGUE_FLAG,
@@ -275,11 +273,11 @@ function checkFatigueFlag(checkIns) {
       exerciseId: null,
       dayLabel: null,
       title: 'Systemic fatigue detected — fix recovery first',
-      description: `Your energy level check-ins show consistently low energy over ${recent.length} weeks. Before any programming changes are made, address the underlying fatigue: prioritise sleep, reduce external stress, and consider whether your total training volume is sustainable. Programming changes made while systematically fatigued rarely fix the problem and often make it worse.`,
+      description: `Your post-session energy ratings have been consistently low. Before making any programming changes, address the underlying fatigue: prioritise sleep, reduce external stress, and consider whether your total training volume is sustainable. Programming changes made while systematically fatigued rarely fix the problem.`,
       guideRule: 'First identify if the issues even stem from your programming. Make sure your nutrition, stress, and sleep are all good first. Then focus on the programming.',
       actionLabel: null,
       actionType: null,
-      dataPoint: `Avg energy rating: ${avgFatigue.toFixed(1)}/3 over last ${recent.length} weeks`,
+      dataPoint: `Avg energy: ${avgEnergy.toFixed(1)}/3 across last ${Math.min(ratedCount, 8)} rated sessions`,
       generatedAt: new Date().toISOString(),
     };
   }
@@ -353,8 +351,8 @@ function checkProgressStalls(program, allSessions, checkIns, exerciseTrends, joi
     : null;
   const nutritionIsIssue = avgNutrition !== null && avgNutrition < 2;
 
-  const avgFatigue    = getAvgFatigueFromCheckIns(checkIns, 3);
-  const fatigueIsIssue = avgFatigue !== null && avgFatigue <= 1.5;
+  const avgEnergy      = getAvgEnergyFromSessions(allSessions);
+  const fatigueIsIssue = avgEnergy !== null && avgEnergy <= 1.5;
 
   for (const splitDay of program.splitDays) {
     for (const exConfig of splitDay.exercises) {
@@ -607,13 +605,16 @@ function checkExerciseOrderOptimization(program, exerciseTrends) {
 // ─── Exercise trends ──────────────────────────────────────────────────────────
 async function calculateExerciseTrends(program, allSessions) {
   const trends = [];
+  const seen   = new Set();
 
   for (const splitDay of program.splitDays) {
     for (const exConfig of splitDay.exercises) {
       const exDef = exerciseLibrary.find(e => e.id === exConfig.exerciseId);
       if (!exDef) continue;
 
-      const exerciseId       = exConfig.exerciseId;
+      const exerciseId = exConfig.exerciseId;
+      if (seen.has(exerciseId)) continue;
+      seen.add(exerciseId);
       const exerciseSessions = allSessions
         .filter(s => s.exercises?.some(e => e.exerciseId === exerciseId))
         .sort((a, b) => new Date(a.date) - new Date(b.date));
@@ -694,7 +695,7 @@ export async function runAdjustmentEngine() {
   const jointActionMetrics = calculateJointActionMetrics(program, exerciseTrends);
 
   if (isOptimizationBlock) {
-    const fatigueRec = checkFatigueFlag(checkIns);
+    const fatigueRec = checkFatigueFlag(allSessions);
     if (fatigueRec) recommendations.push(fatigueRec);
 
     if (allSessions.length > 0) {

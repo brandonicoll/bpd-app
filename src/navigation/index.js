@@ -30,7 +30,8 @@ export default function RootNavigator() {
     );
   }
 
-  if (!isSubscribed) {
+  const skipPaywall = process.env.EXPO_PUBLIC_SKIP_PAYWALL === 'true';
+  if (!isSubscribed && !skipPaywall) {
     return <PaywallScreen />;
   }
 

@@ -2,11 +2,14 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   SafeAreaView, Modal, FlatList, Alert, ActivityIndicator,
-  RefreshControl,
+  RefreshControl, TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, fontSizes, borderRadius } from '../../theme';
-import { getCurrentProgram, swapExerciseInProgram, getCustomExercises, reorderExerciseInProgram } from '../../services/storage';
+import {
+  getCurrentProgram, swapExerciseInProgram, getCustomExercises,
+  reorderExerciseInProgram, addExerciseToProgram, removeExerciseFromProgram,
+} from '../../services/storage';
 import { getCurrentBlockInfo } from '../../services/programEngine';
 import { exercises as exerciseLibrary, getSwapCandidates } from '../../data/exercises';
 import { JOINT_ACTION_LABELS } from '../../data/jointActionLabels';
@@ -119,7 +122,7 @@ function SwapModal({ visible, exerciseId, dayLabel, currentBlock, onClose, onSwa
                   <Text style={swapStyles.candidateMeta}>
                     {item.isCustom
                       ? item.jointActions.slice(0, 2).map(j => JOINT_ACTION_LABELS[j] || j).join(' · ')
-                      : `${item.defaultRepRange[0]}–${item.defaultRepRange[1]} reps · ${item.stability === 'high' ? 'Machine/cable' : item.stability === 'medium' ? 'Dumbbell' : 'Barbell'}`
+                      : `${item.defaultRepRange[0]}–${item.defaultRepRange[1]} reps`
                     }
                   </Text>
                   {item.isCustom && (
@@ -292,6 +295,202 @@ const swapStyles = StyleSheet.create({
   },
 });
 
+// ─── Add exercise modal ───────────────────────────────────────────────────────
+function AddExerciseModal({ visible, dayLabel, existingIds, onClose, onAdded }) {
+  const [query, setQuery] = useState('');
+  const [selected, setSelected] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [customExercises, setCustomExercises] = useState([]);
+  const [createVisible, setCreateVisible] = useState(false);
+
+  useEffect(() => {
+    if (visible) {
+      setQuery('');
+      setSelected(null);
+      getCustomExercises().then(setCustomExercises);
+    }
+  }, [visible]);
+
+  const allExercises = [
+    ...exerciseLibrary,
+    ...customExercises.map(e => ({ ...e, isCustom: true })),
+  ];
+
+  const filtered = allExercises.filter(ex => {
+    if (existingIds.includes(ex.id)) return false;
+    const q = query.toLowerCase();
+    if (!q) return true;
+    return (
+      ex.name.toLowerCase().includes(q) ||
+      ex.muscles?.some(m => m.toLowerCase().includes(q))
+    );
+  });
+
+  async function handleAdd() {
+    if (!selected) return;
+    const ex = allExercises.find(e => e.id === selected);
+    if (!ex) return;
+    setSaving(true);
+    try {
+      await addExerciseToProgram(dayLabel, selected, {
+        exerciseId: selected,
+        sets: 3,
+        repRange: ex.defaultRepRange || [8, 12],
+        rpe: ex.defaultRPE || 7,
+        addedAt: new Date().toISOString(),
+      });
+      onAdded();
+      onClose();
+    } catch (e) {
+      console.error('Add exercise error:', e);
+      Alert.alert('Error', 'Could not add exercise. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <TouchableOpacity style={swapStyles.overlay} onPress={onClose} activeOpacity={1} />
+      <View style={addStyles.sheet}>
+        <View style={swapStyles.handle} />
+        <Text style={swapStyles.title}>Add exercise</Text>
+        <Text style={swapStyles.subtitle}>
+          Adding to: <Text style={swapStyles.subtitleBold}>{dayLabel}</Text>
+        </Text>
+
+        <View style={addStyles.searchRow}>
+          <Ionicons name="search" size={16} color={colors.textTertiary} style={addStyles.searchIcon} />
+          <TextInput
+            style={addStyles.searchInput}
+            placeholder="Search by name or muscle…"
+            placeholderTextColor={colors.textTertiary}
+            value={query}
+            onChangeText={setQuery}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+          {query.length > 0 && (
+            <TouchableOpacity onPress={() => setQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Ionicons name="close-circle" size={16} color={colors.textTertiary} />
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {filtered.length === 0 ? (
+          <Text style={swapStyles.noResults}>No exercises found.</Text>
+        ) : (
+          <FlatList
+            data={filtered}
+            keyExtractor={item => item.id}
+            style={swapStyles.list}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                onPress={() => setSelected(item.id)}
+                activeOpacity={0.75}
+                style={[swapStyles.candidate, selected === item.id && swapStyles.candidateSelected]}
+              >
+                <View style={swapStyles.candidateInfo}>
+                  <Text style={[swapStyles.candidateName, selected === item.id && swapStyles.candidateNameSelected]}>
+                    {item.name}
+                  </Text>
+                  <Text style={swapStyles.candidateMeta}>
+                    {item.isCustom
+                      ? 'Custom exercise'
+                      : `${item.defaultRepRange[0]}–${item.defaultRepRange[1]} reps · RPE ${item.defaultRPE}`}
+                  </Text>
+                  {!item.isCustom && item.muscles?.length > 0 && (
+                    <Text style={swapStyles.candidateNote} numberOfLines={1}>
+                      {item.muscles.slice(0, 3).join(' · ')}
+                    </Text>
+                  )}
+                  {item.isCustom && (
+                    <View style={swapStyles.customChip}>
+                      <Text style={swapStyles.customChipText}>Custom</Text>
+                    </View>
+                  )}
+                </View>
+                {selected === item.id && (
+                  <Ionicons name="checkmark" size={20} color={colors.primary} />
+                )}
+              </TouchableOpacity>
+            )}
+          />
+        )}
+
+        <TouchableOpacity
+          onPress={() => setCreateVisible(true)}
+          style={swapStyles.createBtn}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="add-circle-outline" size={16} color={colors.primary} />
+          <Text style={swapStyles.createBtnText}>Create custom exercise</Text>
+        </TouchableOpacity>
+
+        <View style={swapStyles.footer}>
+          <TouchableOpacity onPress={onClose} style={swapStyles.cancelBtn} activeOpacity={0.7}>
+            <Text style={swapStyles.cancelText}>Cancel</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={handleAdd}
+            disabled={!selected || saving}
+            activeOpacity={0.8}
+            style={[swapStyles.confirmBtn, (!selected || saving) && swapStyles.confirmBtnDisabled]}
+          >
+            {saving
+              ? <ActivityIndicator color="#fff" size="small" />
+              : <Text style={swapStyles.confirmText}>Add exercise</Text>}
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      <CustomExerciseModal
+        visible={createVisible}
+        initialJointActions={[]}
+        onClose={() => setCreateVisible(false)}
+        onSaved={(exercise) => {
+          setCustomExercises(prev => [...prev, exercise]);
+          setSelected(exercise.id);
+          setCreateVisible(false);
+        }}
+      />
+    </Modal>
+  );
+}
+
+const addStyles = StyleSheet.create({
+  sheet: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: colors.background,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: spacing.lg,
+    paddingBottom: 36,
+    maxHeight: '85%',
+  },
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.gray100,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.sm,
+    marginBottom: spacing.sm,
+    height: 40,
+  },
+  searchIcon: { marginRight: spacing.xs },
+  searchInput: {
+    flex: 1,
+    fontSize: fontSizes.sm,
+    color: colors.text,
+    height: 40,
+  },
+});
+
 // ─── ProgramOverviewScreen ────────────────────────────────────────────────────
 export default function ProgramOverviewScreen({ navigation }) {
   const [program, setProgram] = useState(null);
@@ -299,6 +498,8 @@ export default function ProgramOverviewScreen({ navigation }) {
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [swapModal, setSwapModal] = useState({ visible: false, exerciseId: null, dayLabel: null });
+  const [editingDay, setEditingDay] = useState(null);
+  const [addModal, setAddModal] = useState({ visible: false, dayLabel: null, existingIds: [] });
 
   const load = useCallback(async () => {
     const p = await getCurrentProgram();
@@ -321,6 +522,36 @@ export default function ProgramOverviewScreen({ navigation }) {
 
   function closeSwap() {
     setSwapModal({ visible: false, exerciseId: null, dayLabel: null });
+  }
+
+  function openAddModal(dayLabel, existingIds) {
+    setAddModal({ visible: true, dayLabel, existingIds });
+  }
+
+  function closeAddModal() {
+    setAddModal({ visible: false, dayLabel: null, existingIds: [] });
+  }
+
+  function handleDeleteExercise(dayLabel, exerciseId, count) {
+    if (count <= 1) {
+      Alert.alert('Cannot remove', 'Each day must have at least one exercise.');
+      return;
+    }
+    Alert.alert(
+      'Remove exercise?',
+      'This will remove the exercise from this training day.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            await removeExerciseFromProgram(dayLabel, exerciseId);
+            load();
+          },
+        },
+      ]
+    );
   }
 
   if (isLoading) {
@@ -387,73 +618,110 @@ export default function ProgramOverviewScreen({ navigation }) {
         )}
 
         {/* Split days */}
-        {program?.splitDays.map((day, dayIndex) => (
-          <View key={day.dayLabel} style={styles.dayCard}>
-            {/* Day header */}
-            <View style={styles.dayHeader}>
-              <View style={styles.dayIndexBadge}>
-                <Text style={styles.dayIndexText}>{dayIndex + 1}</Text>
-              </View>
-              <Text style={styles.dayLabel}>{day.dayLabel}</Text>
-              <Text style={styles.exerciseCount}>{day.exercises.length} exercises</Text>
-            </View>
-
-            {/* Exercise rows */}
-            {day.exercises.map((exConfig, exIndex) => {
-              const ex = getExercise(exConfig.exerciseId);
-              if (!ex) return null;
-              const isFirst = exIndex === 0;
-              const isLast = exIndex === day.exercises.length - 1;
-              return (
-                <View key={exConfig.exerciseId} style={styles.exRow}>
-                  <TouchableOpacity
-                    style={styles.exInfo}
-                    activeOpacity={0.7}
-                    onPress={() => navigation.navigate('ExerciseDetail', {
-                      exerciseId: exConfig.exerciseId,
-                      dayLabel: day.dayLabel,
-                    })}
-                  >
-                    <View style={[styles.exIndexDot, isFirst && styles.exIndexDotFirst]} />
-                    <View style={styles.exTextGroup}>
-                      <Text style={styles.exName}>{ex.name}</Text>
-                      <Text style={styles.exMeta}>
-                        {exConfig.sets} × {exConfig.repRange[0]}–{exConfig.repRange[1]} reps · RPE {exConfig.rpe}
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-
-                  <View style={styles.reorderBtns}>
-                    <TouchableOpacity
-                      onPress={async () => { await reorderExerciseInProgram(day.dayLabel, exConfig.exerciseId, 'up'); load(); }}
-                      disabled={isFirst}
-                      hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
-                      style={[styles.reorderBtn, isFirst && styles.reorderBtnDisabled]}
-                    >
-                      <Ionicons name="chevron-up" size={12} color={isFirst ? colors.textTertiary : colors.textSecondary} />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={async () => { await reorderExerciseInProgram(day.dayLabel, exConfig.exerciseId, 'down'); load(); }}
-                      disabled={isLast}
-                      hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
-                      style={[styles.reorderBtn, isLast && styles.reorderBtnDisabled]}
-                    >
-                      <Ionicons name="chevron-down" size={12} color={isLast ? colors.textTertiary : colors.textSecondary} />
-                    </TouchableOpacity>
-                  </View>
-
-                  <TouchableOpacity
-                    onPress={() => openSwap(exConfig.exerciseId, day.dayLabel)}
-                    style={styles.swapBtn}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  >
-                    <Ionicons name="swap-horizontal" size={18} color={colors.textSecondary} />
-                  </TouchableOpacity>
+        {program?.splitDays.map((day, dayIndex) => {
+          const isEditing = editingDay === day.dayLabel;
+          return (
+            <View key={day.dayLabel} style={styles.dayCard}>
+              {/* Day header */}
+              <View style={styles.dayHeader}>
+                <View style={styles.dayIndexBadge}>
+                  <Text style={styles.dayIndexText}>{dayIndex + 1}</Text>
                 </View>
-              );
-            })}
-          </View>
-        ))}
+                <Text style={styles.dayLabel}>{day.dayLabel}</Text>
+                <Text style={styles.exerciseCount}>{day.exercises.length} exercises</Text>
+                <TouchableOpacity
+                  onPress={() => setEditingDay(isEditing ? null : day.dayLabel)}
+                  style={styles.editDayBtn}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Ionicons
+                    name={isEditing ? 'checkmark-circle' : 'pencil-outline'}
+                    size={16}
+                    color={isEditing ? colors.primary : colors.textSecondary}
+                  />
+                </TouchableOpacity>
+              </View>
+
+              {/* Exercise rows */}
+              {day.exercises.map((exConfig, exIndex) => {
+                const ex = getExercise(exConfig.exerciseId);
+                if (!ex) return null;
+                const isFirst = exIndex === 0;
+                const isLast = exIndex === day.exercises.length - 1;
+                return (
+                  <View key={exConfig.exerciseId} style={styles.exRow}>
+                    <TouchableOpacity
+                      style={styles.exInfo}
+                      activeOpacity={0.7}
+                      onPress={() => navigation.navigate('ExerciseDetail', {
+                        exerciseId: exConfig.exerciseId,
+                        dayLabel: day.dayLabel,
+                      })}
+                    >
+                      <View style={[styles.exIndexDot, isFirst && styles.exIndexDotFirst]} />
+                      <View style={styles.exTextGroup}>
+                        <Text style={styles.exName}>{ex.name}</Text>
+                        <Text style={styles.exMeta}>
+                          {exConfig.sets} × {exConfig.repRange[0]}–{exConfig.repRange[1]} reps · RPE {exConfig.rpe}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+
+                    {isEditing ? (
+                      <TouchableOpacity
+                        onPress={() => handleDeleteExercise(day.dayLabel, exConfig.exerciseId, day.exercises.length)}
+                        style={styles.deleteBtn}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        <Ionicons name="trash-outline" size={18} color="#E53E3E" />
+                      </TouchableOpacity>
+                    ) : (
+                      <>
+                        <View style={styles.reorderBtns}>
+                          <TouchableOpacity
+                            onPress={async () => { await reorderExerciseInProgram(day.dayLabel, exConfig.exerciseId, 'up'); load(); }}
+                            disabled={isFirst}
+                            hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                            style={[styles.reorderBtn, isFirst && styles.reorderBtnDisabled]}
+                          >
+                            <Ionicons name="chevron-up" size={12} color={isFirst ? colors.textTertiary : colors.textSecondary} />
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            onPress={async () => { await reorderExerciseInProgram(day.dayLabel, exConfig.exerciseId, 'down'); load(); }}
+                            disabled={isLast}
+                            hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                            style={[styles.reorderBtn, isLast && styles.reorderBtnDisabled]}
+                          >
+                            <Ionicons name="chevron-down" size={12} color={isLast ? colors.textTertiary : colors.textSecondary} />
+                          </TouchableOpacity>
+                        </View>
+                        <TouchableOpacity
+                          onPress={() => openSwap(exConfig.exerciseId, day.dayLabel)}
+                          style={styles.swapBtn}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                          <Ionicons name="swap-horizontal" size={18} color={colors.textSecondary} />
+                        </TouchableOpacity>
+                      </>
+                    )}
+                  </View>
+                );
+              })}
+
+              {/* Add exercise row — edit mode only */}
+              {isEditing && (
+                <TouchableOpacity
+                  style={styles.addExRow}
+                  onPress={() => openAddModal(day.dayLabel, day.exercises.map(e => e.exerciseId))}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="add-circle-outline" size={18} color={colors.primary} />
+                  <Text style={styles.addExText}>Add exercise</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          );
+        })}
 
         {/* Exercise library link */}
         <TouchableOpacity
@@ -474,6 +742,15 @@ export default function ProgramOverviewScreen({ navigation }) {
         currentBlock={program?.currentBlock}
         onClose={closeSwap}
         onSwapped={load}
+      />
+
+      {/* Add exercise modal */}
+      <AddExerciseModal
+        visible={addModal.visible}
+        dayLabel={addModal.dayLabel}
+        existingIds={addModal.existingIds}
+        onClose={closeAddModal}
+        onAdded={load}
       />
     </SafeAreaView>
   );
@@ -628,6 +905,28 @@ const styles = StyleSheet.create({
     marginLeft: spacing.sm,
   },
   swapIcon: { fontSize: 14, color: colors.textSecondary, fontWeight: '700' },
+  editDayBtn: {
+    padding: 4,
+    marginLeft: spacing.xs,
+  },
+  deleteBtn: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+  },
+  addExRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 13,
+    borderTopWidth: 0.5,
+    borderTopColor: colors.border,
+  },
+  addExText: {
+    fontSize: fontSizes.sm,
+    fontWeight: '600',
+    color: colors.primary,
+  },
 
   // Library link
   libraryLink: {

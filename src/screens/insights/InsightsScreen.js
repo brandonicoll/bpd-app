@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   SafeAreaView, RefreshControl, ActivityIndicator,
@@ -8,6 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, fontSizes, borderRadius } from '../../theme';
 import { runAdjustmentEngine, SEVERITY, REC_TYPES } from '../../services/adjustmentEngine';
 import { getCurrentBlockInfo } from '../../services/programEngine';
+import { getWeightUnit } from '../../services/storage';
 
 function TrendIcon({ trend }) {
   const map = {
@@ -50,7 +51,7 @@ function RecommendationCard({ rec, onPress }) {
   );
 }
 
-function ExerciseTrendRow({ trend, onPress }) {
+function ExerciseTrendRow({ trend, onPress, weightUnit }) {
   return (
     <TouchableOpacity onPress={onPress} activeOpacity={0.7} style={styles.trendRow}>
       <TrendIcon trend={trend.trend} />
@@ -58,7 +59,7 @@ function ExerciseTrendRow({ trend, onPress }) {
         <Text style={styles.trendName} numberOfLines={1}>{trend.exerciseName}</Text>
         <Text style={styles.trendMeta}>
           {trend.dayLabel} · {trend.sessionsLogged} session{trend.sessionsLogged !== 1 ? 's' : ''}
-          {trend.sessionsLogged >= 2 && trend.lastE1RM > 0 ? ` · ${trend.lastE1RM}kg est. 1RM` : ''}
+          {trend.sessionsLogged >= 2 && trend.lastE1RM > 0 ? ` · ${trend.lastE1RM}${weightUnit} est. 1RM` : ''}
         </Text>
       </View>
       {trend.discomfortFlag && (
@@ -77,6 +78,11 @@ export default function InsightsScreen({ navigation }) {
   const [engineData, setEngineData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [weightUnit, setWeightUnit] = useState('lbs');
+
+  useEffect(() => {
+    getWeightUnit().then(setWeightUnit);
+  }, []);
 
   const load = useCallback(async () => {
     try {
@@ -91,7 +97,6 @@ export default function InsightsScreen({ navigation }) {
 
   useFocusEffect(
     useCallback(() => {
-      setIsLoading(true);
       load();
     }, [load])
   );
@@ -263,14 +268,15 @@ export default function InsightsScreen({ navigation }) {
 
               {exerciseTrends.map((trend, i) => (
                 <View
-                  key={trend.exerciseId}
+                  key={`${trend.exerciseId}-${trend.dayLabel}`}
                   style={i < exerciseTrends.length - 1 ? styles.trendRowBorder : null}
                 >
                   <ExerciseTrendRow
                     trend={trend}
-                    onPress={() => navigation.navigate('ProgramTab', {
-                      screen: 'ExerciseDetail',
-                      params: { exerciseId: trend.exerciseId, dayLabel: trend.dayLabel },
+                    weightUnit={weightUnit}
+                    onPress={() => navigation.navigate('ExerciseDetailFromInsights', {
+                      exerciseId: trend.exerciseId,
+                      dayLabel: trend.dayLabel,
                     })}
                   />
                 </View>

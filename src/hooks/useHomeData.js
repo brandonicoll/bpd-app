@@ -14,7 +14,7 @@ export function useHomeData() {
     blockInfo: null,
     sessionsThisWeek: [],
     streak: null,
-    hasCheckedInThisWeek: false,
+    showNutritionCheckIn: false,
     isLoading: true,
     error: null,
   });
@@ -32,13 +32,15 @@ export function useHomeData() {
       const blockInfo = program ? getCurrentBlockInfo(program.currentBlock) : null;
       const weekKey = currentWeekKey();
       const hasCheckedInThisWeek = checkIns.some(c => c.weekStartDate === weekKey);
+      const todayIsSunday = new Date().getDay() === 0;
+      const showNutritionCheckIn = todayIsSunday && !hasCheckedInThisWeek;
 
       setData({
         program,
         blockInfo,
         sessionsThisWeek,
         streak,
-        hasCheckedInThisWeek,
+        showNutritionCheckIn,
         isLoading: false,
         error: null,
       });

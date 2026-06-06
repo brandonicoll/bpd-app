@@ -1,6 +1,12 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { checkSubscriptionStatus } from '../services/purchases';
 
+// ─── Beta mode ────────────────────────────────────────────────────────────────
+// Set to true during beta testing so testers get full app access
+// without needing sandbox IAP accounts.
+// IMPORTANT: Set this to false before submitting to the App Store.
+const BETA_MODE = true;
+
 const SubscriptionContext = createContext(null);
 
 export function SubscriptionProvider({ children }) {
@@ -8,9 +14,22 @@ export function SubscriptionProvider({ children }) {
   const [isLoading, setIsLoading] = useState(true);
 
   const refresh = useCallback(async () => {
-    const active = await checkSubscriptionStatus();
-    setIsSubscribed(active);
-    setIsLoading(false);
+    if (BETA_MODE) {
+      // In beta mode, everyone gets full access
+      setIsSubscribed(true);
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      const active = await checkSubscriptionStatus();
+      setIsSubscribed(active);
+    } catch (e) {
+      console.error('SubscriptionContext refresh error:', e);
+      setIsSubscribed(false);
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
 
   useEffect(() => {

@@ -16,6 +16,8 @@ import ProgressRing from '../../components/common/ProgressRing';
 import WeeklyCheckIn from '../../components/home/WeeklyCheckIn';
 import { getGreeting, formatDateFriendly } from '../../utils/dateHelpers';
 import { getCurrentBlockInfo } from '../../services/programEngine';
+import { presentCustomerCenter, } from '../../services/purchases';
+import { clearAllData } from '../../services/storage';
 
 export default function HomeScreen({ navigation }) {
   const {
@@ -23,7 +25,7 @@ export default function HomeScreen({ navigation }) {
     blockInfo,
     sessionsThisWeek,
     streak,
-    hasCheckedInThisWeek,
+    showNutritionCheckIn,
     isLoading,
     refresh,
   } = useHomeData();
@@ -70,6 +72,17 @@ export default function HomeScreen({ navigation }) {
           <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />
         }
       >
+        {__DEV__ && (
+          <TouchableOpacity
+            onPress={async () => { await clearAllData(); await refresh(); }}
+            style={{ backgroundColor: '#FF3B30', padding: 8, borderRadius: 8, marginBottom: 12, alignItems: 'center' }}
+          >
+            <Text style={{ color: '#fff', fontWeight: '700', fontSize: 12 }}>
+              DEV: Reset all data & re-onboard
+            </Text>
+          </TouchableOpacity>
+        )}
+
         {/* ── Header ── */}
         <View style={styles.header}>
           <View>
@@ -175,7 +188,7 @@ export default function HomeScreen({ navigation }) {
         )}
 
         {/* ── Nutrition check-in (if not done this week) ── */}
-        {!hasCheckedInThisWeek && (
+        {showNutritionCheckIn && (
           <WeeklyCheckIn onComplete={refresh} />
         )}
 
@@ -202,6 +215,14 @@ export default function HomeScreen({ navigation }) {
             )}
           </View>
         )}
+        {/* Manage subscription */}
+        <TouchableOpacity
+          onPress={presentCustomerCenter}
+          activeOpacity={0.6}
+          style={styles.manageSubBtn}
+        >
+          <Text style={styles.manageSubText}>Manage subscription</Text>
+        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
@@ -474,6 +495,16 @@ const styles = StyleSheet.create({
     fontSize: fontSizes.sm,
     color: colors.danger,
     lineHeight: 20,
+    fontWeight: '500',
+  },
+  manageSubBtn: {
+    alignItems: 'center',
+    paddingVertical: spacing.md,
+    marginTop: spacing.sm,
+  },
+  manageSubText: {
+    fontSize: fontSizes.xs,
+    color: colors.textTertiary,
     fontWeight: '500',
   },
 });

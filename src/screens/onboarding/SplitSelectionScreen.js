@@ -7,10 +7,10 @@ import Button from '../../components/common/Button';
 import { SPLIT_TYPES, SPLITS, SPLIT_RECOMMENDATIONS } from '../../data/splits';
 
 const SPLIT_DESCRIPTIONS = {
-  [SPLIT_TYPES.FULL_BODY]: 'Train every muscle group each session. Maximum frequency per muscle — great for shorter sessions and building consistency.',
+  [SPLIT_TYPES.FULL_BODY]: 'Train every muscle group each session. Maximum frequency per muscle — great for building consistency with fewer days.',
   [SPLIT_TYPES.UPPER_LOWER]: 'Alternate upper and lower body. A great balance of volume and recovery — the most popular structure for a reason.',
   [SPLIT_TYPES.LOWER_UPPER_WOMEN]: "Lower-body first split with extra glute and leg volume. Includes hip thrusts, abductor work, and cable kickbacks that the standard Upper/Lower doesn't have.",
-  [SPLIT_TYPES.PPL_UPPER_LOWER]: 'Three dedicated days for Push, Pull, and Legs — then an Upper and Lower day to hit everything twice. The best structure for 5 days per week.',
+  [SPLIT_TYPES.PPL_UPPER_LOWER]: 'Three dedicated Push, Pull, and Legs days — then an Upper and Lower day to hit everything twice. The best structure for 5 days per week.',
   [SPLIT_TYPES.PPL]: 'Full Push / Pull / Legs cycle twice per week. Maximum volume per muscle group — best for 6 days per week.',
 };
 

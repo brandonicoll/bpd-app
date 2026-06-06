@@ -1,12 +1,14 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
-  SafeAreaView,
+  SafeAreaView, TouchableOpacity,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { StackActions } from '@react-navigation/native';
 import { colors, spacing, fontSizes, borderRadius } from '../../theme';
 import Button from '../../components/common/Button';
 import { exercises as exerciseLibrary } from '../../data/exercises';
+import { updateSession } from '../../services/storage';
 import {
   calculateTotalVolume,
   getBestE1RM,
@@ -15,8 +17,15 @@ import {
   formatWeight,
   discomfortLabel,
 } from '../../utils/workoutHelpers';
+const ENERGY_OPTIONS = [
+  { value: 3, label: 'Great', icon: 'flash',               iconColor: colors.warning  },
+  { value: 2, label: 'Okay',  icon: 'remove-circle-outline', iconColor: colors.textTertiary },
+  { value: 1, label: 'Low',   icon: 'battery-dead-outline', iconColor: colors.danger   },
+];
+
 export default function SessionSummaryScreen({ navigation, route }) {
-  const { session, startTime, endTime } = route.params;
+  const { session, startTime, endTime, weightUnit = 'lbs' } = route.params;
+  const [energyRating, setEnergyRating] = useState(null);
 
   const durationMins = getDurationMinutes(startTime, endTime);
   const totalSets = session.exercises.reduce((sum, ex) => sum + ex.sets.length, 0);
@@ -34,7 +43,11 @@ export default function SessionSummaryScreen({ navigation, route }) {
     [session]
   );
 
-  function handleDone() {
+  async function handleDone() {
+    if (energyRating !== null) {
+      await updateSession(session.id, { energyRating });
+    }
+    navigation.dispatch(StackActions.popToTop());
     navigation.navigate('HomeTab', { screen: 'Home' });
   }
 
@@ -72,7 +85,7 @@ export default function SessionSummaryScreen({ navigation, route }) {
             <Text style={styles.statValue}>
               {totalVolume >= 1000
                 ? `${(totalVolume / 1000).toFixed(1)}t`
-                : `${Math.round(totalVolume)}kg`}
+                : `${Math.round(totalVolume)}${weightUnit}`}
             </Text>
             <Text style={styles.statLabel}>Volume</Text>
           </View>
@@ -88,7 +101,9 @@ export default function SessionSummaryScreen({ navigation, route }) {
                 <Text style={styles.exName}>{def.name}</Text>
                 {discomfort && (
                   <View style={[styles.discomfortBadge, { backgroundColor: discomfort.color + '20' }]}>
-                    <Text style={styles.discomfortEmoji}>{discomfort.emoji}</Text>
+                    <Text style={[styles.discomfortBadgeText, { color: discomfort.color }]}>
+                      {discomfort.label}
+                    </Text>
                   </View>
                 )}
               </View>
@@ -98,7 +113,7 @@ export default function SessionSummaryScreen({ navigation, route }) {
                 <View key={i} style={styles.setRow}>
                   <Text style={styles.setNum}>Set {i + 1}</Text>
                   <Text style={styles.setData}>
-                    {formatWeight(set.weight)}kg × {set.reps} reps
+                    {formatWeight(set.weight)}{weightUnit} × {set.reps} reps
                     {set.rpe ? ` @ RPE ${set.rpe}` : ''}
                   </Text>
                 </View>
@@ -107,7 +122,7 @@ export default function SessionSummaryScreen({ navigation, route }) {
               {/* Best e1RM */}
               {bestE1RM > 0 && (
                 <Text style={styles.e1rmText}>
-                  Best estimated 1RM: <Text style={styles.e1rmValue}>{bestE1RM}kg</Text>
+                  Best estimated 1RM: <Text style={styles.e1rmValue}>{bestE1RM}{weightUnit}</Text>
                 </Text>
               )}
             </View>
@@ -115,14 +130,42 @@ export default function SessionSummaryScreen({ navigation, route }) {
         })}
 
         {/* Discomfort flags */}
-        {exerciseSummaries.some(ex => ex.discomfort?.value >= 8) && (
+        {session.exercises.some(ex => ex.discomfortRating >= 8) && (
           <View style={styles.flagCard}>
-            <Text style={styles.flagTitle}>😬 Joint discomfort noted</Text>
+            <Text style={styles.flagTitle}>Joint discomfort noted</Text>
             <Text style={styles.flagBody}>
               You reported joint pain on one or more exercises. The app will monitor this — if it happens again, a swap recommendation will appear in the Insights tab.
             </Text>
           </View>
         )}
+
+        {/* Energy rating */}
+        <View style={styles.energyCard}>
+          <Text style={styles.energyTitle}>How did you feel during this session?</Text>
+          <View style={styles.energyRow}>
+            {ENERGY_OPTIONS.map(opt => {
+              const isSelected = energyRating === opt.value;
+              return (
+                <TouchableOpacity
+                  key={opt.value}
+                  onPress={() => setEnergyRating(prev => prev === opt.value ? null : opt.value)}
+                  activeOpacity={0.75}
+                  style={[styles.energyOption, isSelected && styles.energyOptionSelected]}
+                >
+                  <Ionicons
+                    name={opt.icon}
+                    size={24}
+                    color={isSelected ? colors.primary : opt.iconColor}
+                  />
+                  <Text style={[styles.energyLabel, isSelected && styles.energyLabelSelected]}>
+                    {opt.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+          <Text style={styles.energyNote}>Optional — helps the engine track fatigue trends</Text>
+        </View>
 
         <Button title="Done" onPress={handleDone} style={styles.doneBtn} />
       </ScrollView>
@@ -180,8 +223,14 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   exName: { fontSize: fontSizes.md, fontWeight: '700', color: colors.text, flex: 1 },
-  discomfortBadge: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  discomfortEmoji: { fontSize: 16 },
+  discomfortBadge: {
+    borderRadius: borderRadius.full,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  discomfortBadgeText: { fontSize: fontSizes.xs, fontWeight: '700' },
   setRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -205,4 +254,49 @@ const styles = StyleSheet.create({
   flagTitle: { fontSize: fontSizes.sm, fontWeight: '700', color: colors.danger, marginBottom: 4 },
   flagBody: { fontSize: fontSizes.sm, color: colors.danger, lineHeight: 20, opacity: 0.85 },
   doneBtn: { marginTop: spacing.md },
+  energyCard: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    marginTop: spacing.md,
+    marginBottom: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  energyTitle: {
+    fontSize: fontSizes.sm,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: spacing.sm,
+  },
+  energyRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  energyOption: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    gap: 4,
+    backgroundColor: colors.background,
+  },
+  energyOptionSelected: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primaryLight,
+  },
+  energyLabel: {
+    fontSize: fontSizes.xs,
+    fontWeight: '600',
+    color: colors.textSecondary,
+  },
+  energyLabelSelected: { color: colors.primary },
+  energyNote: {
+    fontSize: fontSizes.xs,
+    color: colors.textTertiary,
+    textAlign: 'center',
+  },
 });

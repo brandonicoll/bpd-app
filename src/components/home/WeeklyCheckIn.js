@@ -2,37 +2,28 @@ import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ActivityIndicator,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, fontSizes, borderRadius } from '../../theme';
 import { saveWeeklyCheckIn } from '../../services/storage';
 import { currentWeekKey } from '../../utils/dateHelpers';
 
 const NUTRITION_OPTIONS = [
-  { value: 3, label: 'On track',    emoji: '✅', color: colors.success, bg: colors.successLight },
-  { value: 2, label: 'Roughly',     emoji: '🟡', color: colors.warning, bg: colors.warningLight },
-  { value: 1, label: 'Off track',   emoji: '❌', color: colors.danger,  bg: colors.dangerLight  },
-];
-
-const FATIGUE_OPTIONS = [
-  { value: 3, label: 'High energy', emoji: '⚡', color: colors.success, bg: colors.successLight },
-  { value: 2, label: 'Okay',        emoji: '😐', color: colors.warning, bg: colors.warningLight },
-  { value: 1, label: 'Low energy',  emoji: '🪫', color: colors.danger,  bg: colors.dangerLight  },
+  { value: 3, label: 'On track',  icon: 'checkmark-circle', color: colors.success, bg: colors.successLight },
+  { value: 2, label: 'Roughly',   icon: 'remove-circle',    color: colors.warning, bg: colors.warningLight },
+  { value: 1, label: 'Off track', icon: 'close-circle',     color: colors.danger,  bg: colors.dangerLight  },
 ];
 
 export default function WeeklyCheckIn({ onComplete }) {
-  const [nutritionRating, setNutritionRating] = useState(null);
-  const [fatigueRating, setFatigueRating]     = useState(null);
-  const [saving, setSaving] = useState(false);
-
-  const canSave = nutritionRating !== null && fatigueRating !== null;
+  const [selected, setSelected] = useState(null);
+  const [saving, setSaving]     = useState(false);
 
   async function handleSave() {
-    if (!canSave) return;
+    if (!selected) return;
     setSaving(true);
     try {
       await saveWeeklyCheckIn({
         weekStartDate: currentWeekKey(),
-        nutritionRating,
-        fatigueRating,
+        nutritionRating: selected,
         completedAt: new Date().toISOString(),
       });
       onComplete?.();
@@ -45,73 +36,55 @@ export default function WeeklyCheckIn({ onComplete }) {
   return (
     <View style={styles.card}>
       <View style={styles.header}>
-        <Text style={styles.headerEmoji}>📋</Text>
+        <Ionicons name="nutrition" size={28} color={colors.success} />
         <View style={styles.headerText}>
-          <Text style={styles.title}>Weekly check-in</Text>
-          <Text style={styles.subtitle}>2 quick questions — helps the engine understand your context</Text>
+          <Text style={styles.title}>Weekly nutrition check-in</Text>
+          <Text style={styles.subtitle}>How was your nutrition this week?</Text>
         </View>
       </View>
 
-      <Text style={styles.questionLabel}>How was your nutrition this week?</Text>
       <View style={styles.optionsRow}>
-        {NUTRITION_OPTIONS.map(opt => (
-          <TouchableOpacity
-            key={opt.value}
-            onPress={() => setNutritionRating(opt.value)}
-            activeOpacity={0.75}
-            style={[
-              styles.option,
-              nutritionRating === opt.value && { backgroundColor: opt.bg, borderColor: opt.color },
-            ]}
-          >
-            <Text style={styles.optionEmoji}>{opt.emoji}</Text>
-            <Text style={[
-              styles.optionLabel,
-              nutritionRating === opt.value && { color: opt.color },
-            ]}>
-              {opt.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
+        {NUTRITION_OPTIONS.map(opt => {
+          const isSelected = selected === opt.value;
+          return (
+            <TouchableOpacity
+              key={opt.value}
+              onPress={() => setSelected(opt.value)}
+              activeOpacity={0.75}
+              style={[
+                styles.option,
+                isSelected && { backgroundColor: opt.bg, borderColor: opt.color },
+              ]}
+            >
+              <Ionicons
+                name={opt.icon}
+                size={22}
+                color={isSelected ? opt.color : colors.textTertiary}
+              />
+              <Text style={[styles.optionLabel, isSelected && { color: opt.color }]}>
+                {opt.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
       </View>
 
-      <Text style={styles.questionLabel}>How were your energy levels?</Text>
-      <View style={styles.optionsRow}>
-        {FATIGUE_OPTIONS.map(opt => (
-          <TouchableOpacity
-            key={opt.value}
-            onPress={() => setFatigueRating(opt.value)}
-            activeOpacity={0.75}
-            style={[
-              styles.option,
-              fatigueRating === opt.value && { backgroundColor: opt.bg, borderColor: opt.color },
-            ]}
-          >
-            <Text style={styles.optionEmoji}>{opt.emoji}</Text>
-            <Text style={[
-              styles.optionLabel,
-              fatigueRating === opt.value && { color: opt.color },
-            ]}>
-              {opt.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      <TouchableOpacity
-        onPress={handleSave}
-        disabled={!canSave || saving}
-        activeOpacity={0.75}
-        style={[styles.saveBtn, (!canSave || saving) && styles.saveBtnDisabled]}
-      >
-        {saving
-          ? <ActivityIndicator color="#fff" size="small" />
-          : <Text style={styles.saveBtnText}>Save check-in</Text>
-        }
-      </TouchableOpacity>
+      {selected && (
+        <TouchableOpacity
+          onPress={handleSave}
+          disabled={saving}
+          activeOpacity={0.75}
+          style={styles.saveBtn}
+        >
+          {saving
+            ? <ActivityIndicator color="#fff" size="small" />
+            : <Text style={styles.saveBtnText}>Save check-in</Text>
+          }
+        </TouchableOpacity>
+      )}
 
       <Text style={styles.note}>
-        These ratings help the engine distinguish programming issues from lifestyle ones.
+        This helps the engine understand if stalls are from lifestyle, not programming.
       </Text>
     </View>
   );
@@ -132,20 +105,13 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     marginBottom: spacing.md,
   },
-  headerEmoji: { fontSize: 28 },
   headerText: { flex: 1 },
   title: { fontSize: fontSizes.md, fontWeight: '700', color: colors.text },
-  subtitle: { fontSize: fontSizes.xs, color: colors.textSecondary, marginTop: 1, lineHeight: 16 },
-  questionLabel: {
-    fontSize: fontSizes.sm,
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: spacing.sm,
-  },
+  subtitle: { fontSize: fontSizes.sm, color: colors.textSecondary, marginTop: 1 },
   optionsRow: {
     flexDirection: 'row',
     gap: spacing.sm,
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
   },
   option: {
     flex: 1,
@@ -154,14 +120,12 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.md,
     borderWidth: 1.5,
     borderColor: colors.border,
-    gap: 3,
+    gap: 4,
   },
-  optionEmoji: { fontSize: 20 },
   optionLabel: {
     fontSize: fontSizes.xs,
     fontWeight: '600',
     color: colors.textSecondary,
-    textAlign: 'center',
   },
   saveBtn: {
     backgroundColor: colors.primary,
@@ -169,9 +133,9 @@ const styles = StyleSheet.create({
     height: 44,
     alignItems: 'center',
     justifyContent: 'center',
+    marginTop: spacing.xs,
     marginBottom: spacing.sm,
   },
-  saveBtnDisabled: { opacity: 0.38 },
   saveBtnText: { color: '#fff', fontWeight: '600', fontSize: fontSizes.sm },
   note: {
     fontSize: fontSizes.xs,

@@ -1,71 +1,94 @@
-import Purchases from 'react-native-purchases';
+import Purchases, { LOG_LEVEL } from 'react-native-purchases';
+import RevenueCatUI from 'react-native-purchases-ui';
 import { Platform } from 'react-native';
 
-const IOS_KEY = process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY;
+const IOS_KEY     = process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY;
 const ANDROID_KEY = process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_KEY;
 
-export const ENTITLEMENT_ID = 'premium';
+export const ENTITLEMENT_ID = 'BPF App Pro';
 
-const isConfigured = () => {
-  const key = Platform.OS === 'ios' ? IOS_KEY : ANDROID_KEY;
-  return key && !key.startsWith('appl_your') && !key.startsWith('goog_your');
-};
-
-// Call once on app start, before anything else
+// Call once at app start, before rendering anything
 export function initializePurchases() {
-  if (!isConfigured()) {
-    console.warn('RevenueCat API key not set — subscription gate bypassed for testing.');
+  if (__DEV__) {
+    Purchases.setLogLevel(LOG_LEVEL.DEBUG);
+  }
+
+  const apiKey = Platform.OS === 'ios' ? IOS_KEY : ANDROID_KEY;
+  if (!apiKey) {
+    console.warn('[RC] No RevenueCat API key found — check your .env file.');
     return;
   }
-  Purchases.configure({ apiKey: Platform.OS === 'ios' ? IOS_KEY : ANDROID_KEY });
+
+  Purchases.configure({ apiKey });
 }
 
-// Returns true if the user has an active premium entitlement (including trial)
-export async function checkSubscriptionStatus() {
-  if (!isConfigured()) return true; // bypass paywall when no real RC key
-  try {
-    const customerInfo = await Purchases.getCustomerInfo();
-    return customerInfo.entitlements.active[ENTITLEMENT_ID] !== undefined;
-  } catch (e) {
-    console.error('checkSubscriptionStatus error:', e);
-    return false;
-  }
+// Subscribe to real-time customer info updates.
+// Returns a listener object with a .remove() method — call it in useEffect cleanup.
+export function addCustomerInfoListener(callback) {
+  return Purchases.addCustomerInfoUpdateListener(callback);
 }
 
-// Returns the current offering (contains the annual package with trial)
-export async function getCurrentOffering() {
+// Returns the current CustomerInfo or null on error
+export async function getCustomerInfo() {
   try {
-    const offerings = await Purchases.getOfferings();
-    return offerings.current || null;
+    return await Purchases.getCustomerInfo();
   } catch (e) {
-    console.error('getCurrentOffering error:', e);
+    console.error('[RC] getCustomerInfo error:', e);
     return null;
   }
 }
 
-// Purchase a specific package (the annual one)
-// Returns { success: true } or { success: false, userCancelled: bool, error: string }
-export async function purchasePackage(pkg) {
+// Returns true when the user has an active "BPF App Pro" entitlement
+export function isEntitlementActive(customerInfo) {
+  return customerInfo?.entitlements?.active?.[ENTITLEMENT_ID] != null;
+}
+
+// Returns true if the user has an active subscription
+export async function checkSubscriptionStatus() {
+  const info = await getCustomerInfo();
+  return isEntitlementActive(info);
+}
+
+// Returns the current RevenueCat offering (contains your packages)
+export async function getCurrentOffering() {
   try {
-    const { customerInfo } = await Purchases.purchasePackage(pkg);
-    const isActive = customerInfo.entitlements.active[ENTITLEMENT_ID] !== undefined;
-    return { success: isActive };
+    const offerings = await Purchases.getOfferings();
+    return offerings.current ?? null;
   } catch (e) {
-    if (!e.userCancelled) {
-      console.error('purchasePackage error:', e);
-    }
-    return { success: false, userCancelled: e.userCancelled || false, error: e.message };
+    console.error('[RC] getOfferings error:', e);
+    return null;
   }
 }
 
-// Restore previous purchases (required by App Store guidelines)
+// Purchase a package — returns { success, customerInfo?, userCancelled?, error? }
+export async function purchasePackage(pkg) {
+  try {
+    const { customerInfo } = await Purchases.purchasePackage(pkg);
+    return { success: isEntitlementActive(customerInfo), customerInfo };
+  } catch (e) {
+    if (!e.userCancelled) {
+      console.error('[RC] purchasePackage error:', e);
+    }
+    return { success: false, userCancelled: e.userCancelled ?? false, error: e.message };
+  }
+}
+
+// Restore previous purchases — returns { success, customerInfo?, error? }
 export async function restorePurchases() {
   try {
     const customerInfo = await Purchases.restorePurchases();
-    const isActive = customerInfo.entitlements.active[ENTITLEMENT_ID] !== undefined;
-    return { success: isActive };
+    return { success: isEntitlementActive(customerInfo), customerInfo };
   } catch (e) {
-    console.error('restorePurchases error:', e);
+    console.error('[RC] restorePurchases error:', e);
     return { success: false, error: e.message };
+  }
+}
+
+// Opens the RevenueCat Customer Center (manage/cancel/refund)
+export async function presentCustomerCenter() {
+  try {
+    await RevenueCatUI.presentCustomerCenter();
+  } catch (e) {
+    console.error('[RC] presentCustomerCenter error:', e);
   }
 }

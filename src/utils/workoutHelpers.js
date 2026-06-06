@@ -41,19 +41,18 @@ export function formatWeight(weight) {
   return n % 1 === 0 ? String(Math.round(n)) : n.toFixed(1);
 }
 
-// Discomfort value → display label and emoji
+// Discomfort value → display label and color
 export function discomfortLabel(rating) {
   if (!rating) return null;
-  if (rating <= 2) return { emoji: '😊', label: 'Felt great', color: '#1D9E75' };
-  if (rating <= 6) return { emoji: '😐', label: 'Some discomfort', color: '#EF9F27' };
-  return { emoji: '😬', label: 'Joint pain', color: '#D85A30' };
+  if (rating <= 2) return { label: 'Felt great',      color: '#1D9E75' };
+  if (rating <= 6) return { label: 'Some discomfort', color: '#EF9F27' };
+  return             { label: 'Joint pain',       color: '#D85A30' };
 }
 
-// Map the 3 emoji choices to a numeric rating
 export const DISCOMFORT_OPTIONS = [
-  { value: 1, emoji: '😊', label: 'Felt great', color: '#1D9E75', bg: '#E1F5EE' },
-  { value: 5, emoji: '😐', label: 'Some discomfort', color: '#EF9F27', bg: '#FAEEDA' },
-  { value: 8, emoji: '😬', label: 'Joint pain', color: '#D85A30', bg: '#FAECE7' },
+  { value: 1, label: 'Felt great',      shortLabel: 'Great',      color: '#1D9E75', bg: '#E1F5EE' },
+  { value: 5, label: 'Some discomfort', shortLabel: 'Discomfort', color: '#EF9F27', bg: '#FAEEDA' },
+  { value: 8, label: 'Joint pain',      shortLabel: 'Pain',       color: '#D85A30', bg: '#FAECE7' },
 ];
 
 const FOURTEEN_DAYS_MS = 14 * 24 * 60 * 60 * 1000;
