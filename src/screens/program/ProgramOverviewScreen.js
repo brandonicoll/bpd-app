@@ -1,11 +1,12 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   SafeAreaView, Modal, FlatList, Alert, ActivityIndicator,
   RefreshControl, TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, spacing, fontSizes, borderRadius } from '../../theme';
+import { spacing, fontSizes, borderRadius } from '../../theme';
+import { useTheme } from '../../theme/ThemeContext';
 import {
   getCurrentProgram, swapExerciseInProgram, getCustomExercises,
   reorderExerciseInProgram, addExerciseToProgram, removeExerciseFromProgram,
@@ -14,25 +15,28 @@ import { getCurrentBlockInfo } from '../../services/programEngine';
 import { exercises as exerciseLibrary, getSwapCandidates } from '../../data/exercises';
 import { JOINT_ACTION_LABELS } from '../../data/jointActionLabels';
 import CustomExerciseModal from '../../components/common/CustomExerciseModal';
+import ChangeSplitModal from '../../components/program/ChangeSplitModal';
 
 function getExercise(id) {
   return exerciseLibrary.find(e => e.id === id);
 }
 
 // ─── Swap modal ───────────────────────────────────────────────────────────────
-function SwapModal({ visible, exerciseId, dayLabel, currentBlock, onClose, onSwapped }) {
+function SwapModal({ visible, exerciseId, dayLabel, currentBlock, onClose, onSwapped, onCreateCustom, preSelectedId }) {
+  const { colors } = useTheme();
+  const swapStyles = makeSwapStyles(colors);
   const [selected, setSelected] = useState(null);
   const [saving, setSaving] = useState(false);
   const [customExercises, setCustomExercises] = useState([]);
-  const [createVisible, setCreateVisible] = useState(false);
 
   useEffect(() => {
     if (visible) {
+      setSelected(preSelectedId || null);
       getCustomExercises().then(setCustomExercises);
     }
   }, [visible]);
 
-  const currentEx = getExercise(exerciseId);
+  const currentEx = getExercise(exerciseId) || customExercises.find(e => e.id === exerciseId);
   const builtInCandidates = exerciseId ? getSwapCandidates(exerciseId) : [];
   const customCandidates = currentEx
     ? customExercises.filter(custom =>
@@ -144,7 +148,7 @@ function SwapModal({ visible, exerciseId, dayLabel, currentBlock, onClose, onSwa
 
         {/* Create custom exercise shortcut */}
         <TouchableOpacity
-          onPress={() => setCreateVisible(true)}
+          onPress={() => onCreateCustom?.()}
           style={swapStyles.createBtn}
           activeOpacity={0.7}
         >
@@ -169,22 +173,11 @@ function SwapModal({ visible, exerciseId, dayLabel, currentBlock, onClose, onSwa
           </TouchableOpacity>
         </View>
       </View>
-
-      <CustomExerciseModal
-        visible={createVisible}
-        initialJointActions={currentEx?.jointActions || []}
-        onClose={() => setCreateVisible(false)}
-        onSaved={(exercise) => {
-          setCustomExercises(prev => [...prev, exercise]);
-          setSelected(exercise.id);
-          setCreateVisible(false);
-        }}
-      />
     </Modal>
   );
 }
 
-const swapStyles = StyleSheet.create({
+const makeSwapStyles = (colors) => StyleSheet.create({
   overlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.4)',
@@ -296,17 +289,19 @@ const swapStyles = StyleSheet.create({
 });
 
 // ─── Add exercise modal ───────────────────────────────────────────────────────
-function AddExerciseModal({ visible, dayLabel, existingIds, onClose, onAdded }) {
+function AddExerciseModal({ visible, dayLabel, existingIds, onClose, onAdded, onCreateCustom, preSelectedId }) {
+  const { colors } = useTheme();
+  const swapStyles = makeSwapStyles(colors);
+  const addStyles = makeAddStyles(colors);
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState(null);
   const [saving, setSaving] = useState(false);
   const [customExercises, setCustomExercises] = useState([]);
-  const [createVisible, setCreateVisible] = useState(false);
 
   useEffect(() => {
     if (visible) {
       setQuery('');
-      setSelected(null);
+      setSelected(preSelectedId || null);
       getCustomExercises().then(setCustomExercises);
     }
   }, [visible]);
@@ -328,7 +323,12 @@ function AddExerciseModal({ visible, dayLabel, existingIds, onClose, onAdded }) 
 
   async function handleAdd() {
     if (!selected) return;
-    const ex = allExercises.find(e => e.id === selected);
+    let ex = allExercises.find(e => e.id === selected);
+    if (!ex) {
+      // Custom exercise may not be in allExercises yet (async load still in flight)
+      const freshCustom = await getCustomExercises();
+      ex = freshCustom.find(e => e.id === selected);
+    }
     if (!ex) return;
     setSaving(true);
     try {
@@ -421,7 +421,7 @@ function AddExerciseModal({ visible, dayLabel, existingIds, onClose, onAdded }) 
         )}
 
         <TouchableOpacity
-          onPress={() => setCreateVisible(true)}
+          onPress={() => onCreateCustom?.()}
           style={swapStyles.createBtn}
           activeOpacity={0.7}
         >
@@ -445,22 +445,11 @@ function AddExerciseModal({ visible, dayLabel, existingIds, onClose, onAdded }) 
           </TouchableOpacity>
         </View>
       </View>
-
-      <CustomExerciseModal
-        visible={createVisible}
-        initialJointActions={[]}
-        onClose={() => setCreateVisible(false)}
-        onSaved={(exercise) => {
-          setCustomExercises(prev => [...prev, exercise]);
-          setSelected(exercise.id);
-          setCreateVisible(false);
-        }}
-      />
     </Modal>
   );
 }
 
-const addStyles = StyleSheet.create({
+const makeAddStyles = (colors) => StyleSheet.create({
   sheet: {
     position: 'absolute',
     bottom: 0,
@@ -493,17 +482,74 @@ const addStyles = StyleSheet.create({
 
 // ─── ProgramOverviewScreen ────────────────────────────────────────────────────
 export default function ProgramOverviewScreen({ navigation }) {
+  const { colors } = useTheme();
+  const styles = makeStyles(colors);
   const [program, setProgram] = useState(null);
+  const [customExercises, setCustomExercises] = useState([]);
   const [blockInfo, setBlockInfo] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [swapModal, setSwapModal] = useState({ visible: false, exerciseId: null, dayLabel: null });
+
+  // Checks built-in library first, then custom exercises
+  function getExercise(id) {
+    return exerciseLibrary.find(e => e.id === id) || customExercises.find(e => e.id === id);
+  }
+  const [swapModal, setSwapModal] = useState({ visible: false, exerciseId: null, dayLabel: null, preSelectedId: null });
   const [editingDay, setEditingDay] = useState(null);
-  const [addModal, setAddModal] = useState({ visible: false, dayLabel: null, existingIds: [] });
+  const [addModal, setAddModal] = useState({ visible: false, dayLabel: null, existingIds: [], preSelectedId: null });
+  const [showChangeSplit, setShowChangeSplit] = useState(false);
+  const [showCreateCustom, setShowCreateCustom] = useState(false);
+  const createCustomContext = useRef(null);
+
+  // iOS only supports one Modal at a time. Close the sub-modal first,
+  // wait for its dismiss animation (~350ms), then open CustomExerciseModal.
+  function openCreateCustomFromAdd() {
+    createCustomContext.current = {
+      type: 'add',
+      dayLabel: addModal.dayLabel,
+      existingIds: addModal.existingIds,
+    };
+    setAddModal({ visible: false, dayLabel: null, existingIds: [], preSelectedId: null });
+    setTimeout(() => setShowCreateCustom(true), 400);
+  }
+
+  function openCreateCustomFromSwap() {
+    createCustomContext.current = {
+      type: 'swap',
+      exerciseId: swapModal.exerciseId,
+      dayLabel: swapModal.dayLabel,
+    };
+    setSwapModal({ visible: false, exerciseId: null, dayLabel: null, preSelectedId: null });
+    setTimeout(() => setShowCreateCustom(true), 400);
+  }
+
+  function handleCustomExerciseSaved(exercise) {
+    setShowCreateCustom(false);
+    const ctx = createCustomContext.current;
+    createCustomContext.current = null;
+    if (!ctx) return;
+
+    if (ctx.type === 'add') {
+      // Add directly — avoids async race between setSelected and getCustomExercises resolving
+      addExerciseToProgram(ctx.dayLabel, exercise.id, {
+        exerciseId: exercise.id,
+        sets: 3,
+        repRange: exercise.defaultRepRange || [8, 12],
+        rpe: exercise.defaultRPE || 7,
+        addedAt: new Date().toISOString(),
+      }).then(() => load());
+    } else if (ctx.type === 'swap') {
+      // Swap needs user to confirm which exercise to replace, so reopen the modal
+      setTimeout(() => {
+        setSwapModal({ visible: true, exerciseId: ctx.exerciseId, dayLabel: ctx.dayLabel, preSelectedId: exercise.id });
+      }, 400);
+    }
+  }
 
   const load = useCallback(async () => {
-    const p = await getCurrentProgram();
+    const [p, custom] = await Promise.all([getCurrentProgram(), getCustomExercises()]);
     setProgram(p);
+    setCustomExercises(custom);
     if (p) setBlockInfo(getCurrentBlockInfo(p.currentBlock));
     setIsLoading(false);
   }, []);
@@ -575,7 +621,16 @@ export default function ProgramOverviewScreen({ navigation }) {
         }
       >
         {/* Header */}
-        <Text style={styles.screenTitle}>My program</Text>
+        <View style={styles.screenHeader}>
+          <Text style={styles.screenTitle}>My program</Text>
+          <TouchableOpacity
+            onPress={() => setShowChangeSplit(true)}
+            style={styles.changeSplitBtn}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.changeSplitBtnText}>Change split</Text>
+          </TouchableOpacity>
+        </View>
 
         {/* Block + week progress card */}
         {blockInfo && program && (
@@ -649,7 +704,7 @@ export default function ProgramOverviewScreen({ navigation }) {
                 const isFirst = exIndex === 0;
                 const isLast = exIndex === day.exercises.length - 1;
                 return (
-                  <View key={exConfig.exerciseId} style={styles.exRow}>
+                  <View key={`${exConfig.exerciseId}-${exIndex}`} style={styles.exRow}>
                     <TouchableOpacity
                       style={styles.exInfo}
                       activeOpacity={0.7}
@@ -742,6 +797,8 @@ export default function ProgramOverviewScreen({ navigation }) {
         currentBlock={program?.currentBlock}
         onClose={closeSwap}
         onSwapped={load}
+        onCreateCustom={openCreateCustomFromSwap}
+        preSelectedId={swapModal.preSelectedId}
       />
 
       {/* Add exercise modal */}
@@ -751,12 +808,32 @@ export default function ProgramOverviewScreen({ navigation }) {
         existingIds={addModal.existingIds}
         onClose={closeAddModal}
         onAdded={load}
+        onCreateCustom={openCreateCustomFromAdd}
+        preSelectedId={addModal.preSelectedId}
+      />
+
+      {/* Change split modal */}
+      <ChangeSplitModal
+        visible={showChangeSplit}
+        currentProgram={program}
+        onClose={() => setShowChangeSplit(false)}
+        onChanged={() => { setShowChangeSplit(false); load(); }}
+      />
+
+      {/* Custom exercise creator — at screen level; sub-modal dismissed before this opens */}
+      <CustomExerciseModal
+        visible={showCreateCustom}
+        onClose={() => {
+          setShowCreateCustom(false);
+          createCustomContext.current = null;
+        }}
+        onSaved={handleCustomExerciseSaved}
       />
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors) => StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
   scroll: { flex: 1 },
   content: { padding: spacing.lg, paddingBottom: spacing.xxl },
@@ -765,7 +842,24 @@ const styles = StyleSheet.create({
     fontSize: fontSizes.xxl,
     fontWeight: '700',
     color: colors.text,
+  },
+
+  screenHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: spacing.md,
+  },
+  changeSplitBtn: {
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.full,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+  },
+  changeSplitBtnText: {
+    fontSize: fontSizes.xs,
+    fontWeight: '700',
+    color: '#fff',
   },
 
   // Block card

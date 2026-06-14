@@ -6,12 +6,14 @@ jest.mock('../../../src/services/storage', () => ({
   getCurrentProgram: jest.fn(),
   getAllSessions: jest.fn(),
   getAllCheckIns: jest.fn(),
+  getCustomExercises: jest.fn(),
 }));
 
-function setStorageMocks({ program, sessions = [], checkIns = [] }) {
+function setStorageMocks({ program, sessions = [], checkIns = [], customExercises = [] }) {
   storage.getCurrentProgram.mockResolvedValue(program);
   storage.getAllSessions.mockResolvedValue(sessions);
   storage.getAllCheckIns.mockResolvedValue(checkIns);
+  storage.getCustomExercises.mockResolvedValue(customExercises);
 }
 
 // ─── No program ───────────────────────────────────────────────────────────────

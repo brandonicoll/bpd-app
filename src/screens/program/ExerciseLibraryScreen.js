@@ -5,13 +5,16 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, spacing, fontSizes, borderRadius } from '../../theme';
+import { spacing, fontSizes, borderRadius } from '../../theme';
+import { useTheme } from '../../theme/ThemeContext';
 import { exercises as builtInExercises } from '../../data/exercises';
 import { getCustomExercises, deleteCustomExercise } from '../../services/storage';
 import { JOINT_ACTION_LABELS } from '../../data/jointActionLabels';
 import CustomExerciseModal from '../../components/common/CustomExerciseModal';
 
 export default function ExerciseLibraryScreen({ navigation }) {
+  const { colors } = useTheme();
+  const styles = makeStyles(colors);
   const [query, setQuery] = useState('');
   const [customExercises, setCustomExercises] = useState([]);
   const [modalVisible, setModalVisible] = useState(false);
@@ -44,8 +47,9 @@ export default function ExerciseLibraryScreen({ navigation }) {
     );
   }, [query, allExercises]);
 
-  function handleSaved(exercise) {
-    setCustomExercises(prev => [...prev, exercise]);
+  async function handleSaved() {
+    const updated = await getCustomExercises();
+    setCustomExercises(updated);
     setModalVisible(false);
   }
 
@@ -180,7 +184,7 @@ export default function ExerciseLibraryScreen({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors) => StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
   container: { flex: 1, padding: spacing.lg },
   header: {

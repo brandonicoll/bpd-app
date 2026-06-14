@@ -2,8 +2,14 @@ import {
   getCurrentProgram,
   getAllSessions,
   getAllCheckIns,
+  getCustomExercises,
 } from './storage';
 import { exercises as exerciseLibrary } from '../data/exercises';
+
+let _customExercises = [];
+function findExercise(id) {
+  return exerciseLibrary.find(e => e.id === id) || _customExercises.find(e => e.id === id);
+}
 import { PLATEAU_THRESHOLDS } from '../data/splits';
 import { JOINT_ACTION_LABELS } from '../data/jointActionLabels';
 import { getWeekStart } from '../utils/dateHelpers';
@@ -77,7 +83,7 @@ export function calculateJointActionMetrics(program, exerciseTrends) {
 
   for (const splitDay of program.splitDays) {
     for (const exConfig of splitDay.exercises) {
-      const exDef = exerciseLibrary.find(e => e.id === exConfig.exerciseId);
+      const exDef = findExercise(exConfig.exerciseId);
       if (!exDef) continue;
 
       for (const jointAction of exDef.jointActions) {
@@ -124,7 +130,7 @@ export function calculateJointActionMetrics(program, exerciseTrends) {
 export function detectInterSessionRecovery(jointAction, program, allSessions) {
   const daysWithAction = program.splitDays.filter(day =>
     day.exercises.some(exConfig => {
-      const exDef = exerciseLibrary.find(e => e.id === exConfig.exerciseId);
+      const exDef = findExercise(exConfig.exerciseId);
       return exDef?.jointActions.includes(jointAction);
     })
   );
@@ -145,7 +151,7 @@ export function detectInterSessionRecovery(jointAction, program, allSessions) {
     const secondSession = relevantSessions[1];
 
     for (const exData of (firstSession.exercises || [])) {
-      const exDef = exerciseLibrary.find(e => e.id === exData.exerciseId);
+      const exDef = findExercise(exData.exerciseId);
       if (!exDef?.jointActions.includes(jointAction)) continue;
 
       const secondExData = (secondSession.exercises || [])
@@ -188,7 +194,7 @@ function checkDiscomfortRules(program, allSessions) {
   for (const splitDay of program.splitDays) {
     for (const exConfig of splitDay.exercises) {
       const exerciseId = exConfig.exerciseId;
-      const exDef      = exerciseLibrary.find(e => e.id === exerciseId);
+      const exDef      = findExercise(exerciseId);
       if (!exDef) continue;
 
       const exerciseSessions = allSessions
@@ -300,7 +306,7 @@ function checkJointActionVolume(program, allSessions, jointActionMetrics) {
 
     const exercisesToConsider = metrics.exercises
       .map(id => {
-        const exDef   = exerciseLibrary.find(e => e.id === id);
+        const exDef   = findExercise(id);
         const exConfig = program.splitDays.flatMap(d => d.exercises).find(e => e.exerciseId === id);
         return { id, exDef, sets: exConfig?.sets || 0 };
       })
@@ -357,7 +363,7 @@ function checkProgressStalls(program, allSessions, checkIns, exerciseTrends, joi
   for (const splitDay of program.splitDays) {
     for (const exConfig of splitDay.exercises) {
       const exerciseId = exConfig.exerciseId;
-      const exDef      = exerciseLibrary.find(e => e.id === exerciseId);
+      const exDef      = findExercise(exerciseId);
       if (!exDef) continue;
 
       const exerciseSessions = allSessions
@@ -496,7 +502,7 @@ function checkRPEAdjustments(program, allSessions) {
   for (const splitDay of program.splitDays) {
     for (const exConfig of splitDay.exercises) {
       const exerciseId = exConfig.exerciseId;
-      const exDef      = exerciseLibrary.find(e => e.id === exerciseId);
+      const exDef      = findExercise(exerciseId);
       if (!exDef) continue;
 
       const exerciseSessions = allSessions
@@ -548,7 +554,7 @@ function checkExerciseOrderOptimization(program, exerciseTrends) {
     const dayItems = dayExercises
       .map((exConfig, position) => {
         const trend = exerciseTrends.find(t => t.exerciseId === exConfig.exerciseId);
-        const exDef = exerciseLibrary.find(e => e.id === exConfig.exerciseId);
+        const exDef = findExercise(exConfig.exerciseId);
         if (!trend || !exDef) return null;
         return { exConfig, trend, position, exDef };
       })
@@ -609,7 +615,7 @@ async function calculateExerciseTrends(program, allSessions) {
 
   for (const splitDay of program.splitDays) {
     for (const exConfig of splitDay.exercises) {
-      const exDef = exerciseLibrary.find(e => e.id === exConfig.exerciseId);
+      const exDef = findExercise(exConfig.exerciseId);
       if (!exDef) continue;
 
       const exerciseId = exConfig.exerciseId;
@@ -675,11 +681,13 @@ async function calculateExerciseTrends(program, allSessions) {
 
 // ─── Main engine runner ───────────────────────────────────────────────────────
 export async function runAdjustmentEngine() {
-  const [program, allSessions, checkIns] = await Promise.all([
+  const [program, allSessions, checkIns, customExercises] = await Promise.all([
     getCurrentProgram(),
     getAllSessions(),
     getAllCheckIns(),
+    getCustomExercises(),
   ]);
+  _customExercises = customExercises;
 
   if (!program) {
     return { recommendations: [], exerciseTrends: [], jointActionMetrics: {}, program: null, summary: null };

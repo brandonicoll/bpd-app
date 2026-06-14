@@ -6,7 +6,8 @@ import {
 import ViewShot from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, spacing, fontSizes, borderRadius } from '../../theme';
+import { spacing, fontSizes, borderRadius } from '../../theme';
+import { useTheme } from '../../theme/ThemeContext';
 import { getAllSessions, getStreak, getCurrentProgram } from '../../services/storage';
 import { getCurrentBlockInfo } from '../../services/programEngine';
 import { exercises as exerciseLibrary } from '../../data/exercises';
@@ -38,6 +39,8 @@ function getTopLiftThisWeek(sessions) {
 }
 
 function ProgressCard({ data }) {
+  const { colors } = useTheme();
+  const card = makeCardStyles(colors);
   const { program, blockInfo, sessionsThisWeek, streak, topLift } = data;
   const completionRatio = program ? Math.min(sessionsThisWeek / program.daysPerWeek, 1) : 0;
 
@@ -104,7 +107,7 @@ function ProgressCard({ data }) {
   );
 }
 
-const card = StyleSheet.create({
+const makeCardStyles = (colors) => StyleSheet.create({
   container: {
     width: CARD_WIDTH,
     height: CARD_HEIGHT,
@@ -177,6 +180,8 @@ const card = StyleSheet.create({
 });
 
 export default function ShareableCardScreen({ navigation }) {
+  const { colors } = useTheme();
+  const styles = makeStyles(colors);
   const viewShotRef = useRef(null);
   const [cardData, setCardData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -278,7 +283,7 @@ export default function ShareableCardScreen({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors) => StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
   header: {
     flexDirection: 'row',

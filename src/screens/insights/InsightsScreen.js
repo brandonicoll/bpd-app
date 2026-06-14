@@ -5,12 +5,14 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, spacing, fontSizes, borderRadius } from '../../theme';
+import { spacing, fontSizes, borderRadius } from '../../theme';
+import { useTheme } from '../../theme/ThemeContext';
 import { runAdjustmentEngine, SEVERITY, REC_TYPES } from '../../services/adjustmentEngine';
 import { getCurrentBlockInfo } from '../../services/programEngine';
 import { getWeightUnit } from '../../services/storage';
 
 function TrendIcon({ trend }) {
+  const { colors } = useTheme();
   const map = {
     progressing: { name: 'trending-up',     color: colors.success },
     plateau:     { name: 'remove',          color: colors.warning },
@@ -22,6 +24,8 @@ function TrendIcon({ trend }) {
 }
 
 function RecommendationCard({ rec, onPress }) {
+  const { colors } = useTheme();
+  const styles = makeStyles(colors);
   const config = {
     [SEVERITY.URGENT]: { borderColor: colors.danger,  bg: colors.dangerLight,  iconName: 'alert-circle',        iconColor: colors.danger },
     [SEVERITY.NORMAL]: { borderColor: colors.warning, bg: colors.warningLight, iconName: 'bulb',                iconColor: colors.warning },
@@ -52,6 +56,8 @@ function RecommendationCard({ rec, onPress }) {
 }
 
 function ExerciseTrendRow({ trend, onPress, weightUnit }) {
+  const { colors } = useTheme();
+  const styles = makeStyles(colors);
   return (
     <TouchableOpacity onPress={onPress} activeOpacity={0.7} style={styles.trendRow}>
       <TrendIcon trend={trend.trend} />
@@ -75,6 +81,8 @@ function ExerciseTrendRow({ trend, onPress, weightUnit }) {
 }
 
 export default function InsightsScreen({ navigation }) {
+  const { colors } = useTheme();
+  const styles = makeStyles(colors);
   const [engineData, setEngineData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -337,7 +345,7 @@ export default function InsightsScreen({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors) => StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
   scroll: { flex: 1 },
   content: { padding: spacing.lg, paddingBottom: spacing.xxl },

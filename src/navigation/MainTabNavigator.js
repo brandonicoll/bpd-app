@@ -1,7 +1,7 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../theme';
+import { useTheme } from '../theme/ThemeContext';
 
 import HomeStack from './HomeStack';
 import ProgramStack from './ProgramStack';
@@ -12,6 +12,8 @@ import SocialStack from './SocialStack';
 const Tab = createBottomTabNavigator();
 
 export default function MainTabNavigator() {
+  const { colors } = useTheme();
+
   return (
     <Tab.Navigator
       screenOptions={{

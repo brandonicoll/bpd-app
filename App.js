@@ -4,6 +4,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AppProvider } from './src/context/AppContext';
 import { SubscriptionProvider } from './src/context/SubscriptionContext';
+import { ThemeProvider } from './src/theme/ThemeContext';
 import { initializePurchases } from './src/services/purchases';
 import RootNavigator from './src/navigation';
 
@@ -14,11 +15,13 @@ export default function App() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <AppProvider>
-          <SubscriptionProvider>
-            <RootNavigator />
-          </SubscriptionProvider>
-        </AppProvider>
+        <ThemeProvider>
+          <AppProvider>
+            <SubscriptionProvider>
+              <RootNavigator />
+            </SubscriptionProvider>
+          </AppProvider>
+        </ThemeProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

@@ -3,17 +3,21 @@ import {
   View, Text, StyleSheet, TouchableOpacity, ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, spacing, fontSizes, borderRadius } from '../../theme';
+import { spacing, fontSizes, borderRadius } from '../../theme';
+import { useTheme } from '../../theme/ThemeContext';
 import { saveWeeklyCheckIn } from '../../services/storage';
 import { currentWeekKey } from '../../utils/dateHelpers';
 
-const NUTRITION_OPTIONS = [
-  { value: 3, label: 'On track',  icon: 'checkmark-circle', color: colors.success, bg: colors.successLight },
-  { value: 2, label: 'Roughly',   icon: 'remove-circle',    color: colors.warning, bg: colors.warningLight },
-  { value: 1, label: 'Off track', icon: 'close-circle',     color: colors.danger,  bg: colors.dangerLight  },
-];
-
 export default function WeeklyCheckIn({ onComplete }) {
+  const { colors } = useTheme();
+  const styles = makeStyles(colors);
+
+  const NUTRITION_OPTIONS = [
+    { value: 3, label: 'On track',  icon: 'checkmark-circle', color: colors.success, bg: colors.successLight },
+    { value: 2, label: 'Roughly',   icon: 'remove-circle',    color: colors.warning, bg: colors.warningLight },
+    { value: 1, label: 'Off track', icon: 'close-circle',     color: colors.danger,  bg: colors.dangerLight  },
+  ];
+
   const [selected, setSelected] = useState(null);
   const [saving, setSaving]     = useState(false);
 
@@ -90,7 +94,7 @@ export default function WeeklyCheckIn({ onComplete }) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors) => StyleSheet.create({
   card: {
     backgroundColor: colors.surface,
     borderRadius: borderRadius.lg,

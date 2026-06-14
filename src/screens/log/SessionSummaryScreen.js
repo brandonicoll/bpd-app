@@ -1,13 +1,15 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
   SafeAreaView, TouchableOpacity,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { StackActions } from '@react-navigation/native';
-import { colors, spacing, fontSizes, borderRadius } from '../../theme';
+import { spacing, fontSizes, borderRadius } from '../../theme';
+import { useTheme } from '../../theme/ThemeContext';
 import Button from '../../components/common/Button';
 import { exercises as exerciseLibrary } from '../../data/exercises';
+import { getCustomExercises } from '../../services/storage';
 import { updateSession } from '../../services/storage';
 import {
   calculateTotalVolume,
@@ -17,13 +19,25 @@ import {
   formatWeight,
   discomfortLabel,
 } from '../../utils/workoutHelpers';
-const ENERGY_OPTIONS = [
-  { value: 3, label: 'Great', icon: 'flash',               iconColor: colors.warning  },
-  { value: 2, label: 'Okay',  icon: 'remove-circle-outline', iconColor: colors.textTertiary },
-  { value: 1, label: 'Low',   icon: 'battery-dead-outline', iconColor: colors.danger   },
-];
-
 export default function SessionSummaryScreen({ navigation, route }) {
+  const { colors } = useTheme();
+  const styles = makeStyles(colors);
+  const [customExercises, setCustomExercises] = useState([]);
+
+  useEffect(() => {
+    getCustomExercises().then(setCustomExercises);
+  }, []);
+
+  function findExercise(id) {
+    return exerciseLibrary.find(e => e.id === id) || customExercises.find(e => e.id === id);
+  }
+
+  const ENERGY_OPTIONS = [
+    { value: 3, label: 'Great', icon: 'flash',               iconColor: colors.warning  },
+    { value: 2, label: 'Okay',  icon: 'remove-circle-outline', iconColor: colors.textTertiary },
+    { value: 1, label: 'Low',   icon: 'battery-dead-outline', iconColor: colors.danger   },
+  ];
+
   const { session, startTime, endTime, weightUnit = 'lbs' } = route.params;
   const [energyRating, setEnergyRating] = useState(null);
 
@@ -35,12 +49,12 @@ export default function SessionSummaryScreen({ navigation, route }) {
 
   const exerciseSummaries = useMemo(() =>
     session.exercises.map(ex => {
-      const def = exerciseLibrary.find(e => e.id === ex.exerciseId);
+      const def = findExercise(ex.exerciseId);
       const bestE1RM = getBestE1RM(ex.sets);
       const discomfort = discomfortLabel(ex.discomfortRating);
       return { def, sets: ex.sets, bestE1RM, discomfort, exerciseId: ex.exerciseId };
     }),
-    [session]
+    [session, customExercises]
   );
 
   async function handleDone() {
@@ -173,7 +187,7 @@ export default function SessionSummaryScreen({ navigation, route }) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors) => StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
   scroll: { flex: 1 },
   content: { padding: spacing.lg, paddingBottom: spacing.xxl },

@@ -42,6 +42,18 @@ export function currentWeekKey() {
   return getWeekStart().toISOString().split('T')[0];
 }
 
+// Human-readable time ago: "just now", "5 min ago", "2 hours ago", "3 days ago"
+export function formatDistanceToNow(isoString) {
+  const diffMs = Date.now() - new Date(isoString).getTime();
+  const diffMin = Math.floor(diffMs / 60000);
+  if (diffMin < 1)  return 'just now';
+  if (diffMin < 60) return `${diffMin} min ago`;
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24)  return `${diffHr} hour${diffHr !== 1 ? 's' : ''} ago`;
+  const diffDay = Math.floor(diffHr / 24);
+  return `${diffDay} day${diffDay !== 1 ? 's' : ''} ago`;
+}
+
 // Get a greeting based on time of day
 export function getGreeting() {
   const hour = new Date().getHours();

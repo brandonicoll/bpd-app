@@ -2,13 +2,15 @@ import React, { useState, useCallback } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
   View, Text, StyleSheet, ScrollView,
-  TouchableOpacity, SafeAreaView, ActivityIndicator,
+  TouchableOpacity, SafeAreaView, ActivityIndicator, Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, spacing, fontSizes, borderRadius } from '../../theme';
+import { spacing, fontSizes, borderRadius } from '../../theme';
+import { useTheme } from '../../theme/ThemeContext';
 import { getExerciseRPEGuidance } from '../../utils/workoutHelpers';
+import { formatDistanceToNow } from '../../utils/dateHelpers';
 import Button from '../../components/common/Button';
-import { getCurrentProgram } from '../../services/storage';
+import { getCurrentProgram, getDraftSession, clearDraftSession, getCustomExercises } from '../../services/storage';
 import { getCurrentBlockInfo } from '../../services/programEngine';
 import { exercises as exerciseLibrary } from '../../data/exercises';
 
@@ -17,17 +19,27 @@ function getExercise(id) {
 }
 
 export default function StartWorkoutScreen({ navigation, route }) {
+  const { colors } = useTheme();
+  const styles = makeStyles(colors);
   const preselectedDay = route.params?.splitDay || null;
 
   const [program, setProgram] = useState(null);
+  const [customExercises, setCustomExercises] = useState([]);
   const [selectedDay, setSelectedDay] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [draft, setDraft] = useState(null);
+
+  function getExercise(id) {
+    return exerciseLibrary.find(e => e.id === id) || customExercises.find(e => e.id === id);
+  }
 
   useFocusEffect(
     useCallback(() => {
       async function load() {
-        const p = await getCurrentProgram();
+        const [p, d, custom] = await Promise.all([getCurrentProgram(), getDraftSession(), getCustomExercises()]);
         setProgram(p);
+        setDraft(d);
+        setCustomExercises(custom);
         if (preselectedDay) {
           const found = p?.splitDays.find(d => d.dayLabel === preselectedDay.dayLabel);
           setSelectedDay(found || p?.splitDays[0] || null);
@@ -39,6 +51,33 @@ export default function StartWorkoutScreen({ navigation, route }) {
       load();
     }, [])
   );
+
+  function handleResumeDraft() {
+    if (!draft) return;
+    navigation.navigate('ActiveWorkout', {
+      splitDay: draft.splitDay,
+      currentBlock: draft.currentBlock,
+      draftData: draft,
+    });
+  }
+
+  function handleDiscardDraft() {
+    Alert.alert(
+      'Discard workout?',
+      `This will delete your unfinished ${draft?.splitDay?.dayLabel} session.`,
+      [
+        { text: 'Keep it', style: 'cancel' },
+        {
+          text: 'Discard',
+          style: 'destructive',
+          onPress: async () => {
+            await clearDraftSession();
+            setDraft(null);
+          },
+        },
+      ]
+    );
+  }
 
   if (isLoading) {
     return (
@@ -67,6 +106,26 @@ export default function StartWorkoutScreen({ navigation, route }) {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
+          {/* Resume draft card */}
+          {draft && (
+            <View style={styles.resumeCard}>
+              <View style={styles.resumeCardLeft}>
+                <Text style={styles.resumeCardTitle}>Unfinished workout</Text>
+                <Text style={styles.resumeCardMeta}>
+                  {draft.splitDay?.dayLabel} · {formatDistanceToNow(draft.savedAt)}
+                </Text>
+              </View>
+              <View style={styles.resumeCardActions}>
+                <TouchableOpacity onPress={handleResumeDraft} style={styles.resumeBtn} activeOpacity={0.8}>
+                  <Text style={styles.resumeBtnText}>Resume</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={handleDiscardDraft} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Text style={styles.discardText}>Discard</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
           {/* Block reminder */}
           {blockInfo && (
             <View style={[styles.blockBanner, { borderLeftColor: blockInfo.color }]}>
@@ -114,7 +173,7 @@ export default function StartWorkoutScreen({ navigation, route }) {
                 if (!ex) return null;
                 const rpeGuidance = getExerciseRPEGuidance(exConfig, program?.currentBlock || 1);
                 return (
-                  <View key={exConfig.exerciseId} style={styles.exercisePreviewRow}>
+                  <View key={`${exConfig.exerciseId}-${i}`} style={styles.exercisePreviewRow}>
                     <View style={styles.exerciseIndex}>
                       <Text style={styles.exerciseIndexText}>{i + 1}</Text>
                     </View>
@@ -152,7 +211,7 @@ export default function StartWorkoutScreen({ navigation, route }) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors) => StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
   container: { flex: 1 },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
@@ -163,10 +222,35 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
   },
-  backArrow: { fontSize: 22, color: colors.text },
   headerTitle: { fontSize: fontSizes.lg, fontWeight: '700', color: colors.text },
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xl },
+
+  resumeCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.primaryLight,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1.5,
+    borderColor: colors.primary,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    marginTop: spacing.sm,
+  },
+  resumeCardLeft: { flex: 1 },
+  resumeCardTitle: { fontSize: fontSizes.sm, fontWeight: '700', color: colors.primary, marginBottom: 2 },
+  resumeCardMeta: { fontSize: fontSizes.xs, color: colors.primaryDark, opacity: 0.8 },
+  resumeCardActions: { alignItems: 'flex-end', gap: 6 },
+  resumeBtn: {
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: 16,
+    paddingVertical: 7,
+  },
+  resumeBtnText: { color: '#fff', fontWeight: '700', fontSize: fontSizes.sm },
+  discardText: { fontSize: fontSizes.xs, color: colors.danger, fontWeight: '600' },
+
   blockBanner: {
     borderLeftWidth: 3,
     backgroundColor: colors.surface,

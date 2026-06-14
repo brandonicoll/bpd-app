@@ -3,11 +3,12 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import InsightsScreen from '../screens/insights/InsightsScreen';
 import AdjustmentDetailScreen from '../screens/insights/AdjustmentDetailScreen';
 import ExerciseDetailScreen from '../screens/program/ExerciseDetailScreen';
-import { colors } from '../theme';
+import { useTheme } from '../theme/ThemeContext';
 
 const Stack = createNativeStackNavigator();
 
 export default function InsightsStack() {
+  const { colors } = useTheme();
   return (
     <Stack.Navigator
       screenOptions={{

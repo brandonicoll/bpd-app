@@ -3,7 +3,8 @@ import {
   View, Text, StyleSheet, ScrollView,
   SafeAreaView, ActivityIndicator, useWindowDimensions,
 } from 'react-native';
-import { colors, spacing, fontSizes, borderRadius } from '../../theme';
+import { spacing, fontSizes, borderRadius } from '../../theme';
+import { useTheme } from '../../theme/ThemeContext';
 import { getExerciseProgressTrend, getCustomExercises, getWeightUnit } from '../../services/storage';
 import { exercises as exerciseLibrary } from '../../data/exercises';
 import { JOINT_ACTION_LABELS } from '../../data/jointActionLabels';
@@ -12,6 +13,8 @@ import { formatWeight, discomfortLabel } from '../../utils/workoutHelpers';
 import { relativeDateLabel } from '../../utils/dateHelpers';
 
 export default function ExerciseDetailScreen({ navigation, route }) {
+  const { colors } = useTheme();
+  const styles = makeStyles(colors);
   const { exerciseId, dayLabel } = route.params;
   const { width } = useWindowDimensions();
   const chartWidth = width - spacing.lg * 2 - spacing.md * 2;
@@ -243,7 +246,7 @@ export default function ExerciseDetailScreen({ navigation, route }) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors) => StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
   scroll: { flex: 1 },
   content: { padding: spacing.lg, paddingBottom: spacing.xxl },

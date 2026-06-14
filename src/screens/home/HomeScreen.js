@@ -10,7 +10,8 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, spacing, fontSizes, borderRadius } from '../../theme';
+import { spacing, fontSizes, borderRadius } from '../../theme';
+import { useTheme } from '../../theme/ThemeContext';
 import { useHomeData, getNextSession } from '../../hooks/useHomeData';
 import ProgressRing from '../../components/common/ProgressRing';
 import WeeklyCheckIn from '../../components/home/WeeklyCheckIn';
@@ -20,6 +21,8 @@ import { presentCustomerCenter, } from '../../services/purchases';
 import { clearAllData } from '../../services/storage';
 
 export default function HomeScreen({ navigation }) {
+  const { colors } = useTheme();
+  const styles = makeStyles(colors);
   const {
     program,
     blockInfo,
@@ -89,8 +92,13 @@ export default function HomeScreen({ navigation }) {
             <Text style={styles.greeting}>{getGreeting()}</Text>
             <Text style={styles.date}>{formatDateFriendly()}</Text>
           </View>
-          <View style={styles.weekBadge}>
-            <Text style={styles.weekBadgeText}>Week {program.currentWeek} of 12</Text>
+          <View style={styles.headerRight}>
+            <View style={styles.weekBadge}>
+              <Text style={styles.weekBadgeText}>Week {program.currentWeek} of 12</Text>
+            </View>
+            <TouchableOpacity onPress={() => navigation.navigate('Settings')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Ionicons name="settings-outline" size={20} color={colors.textSecondary} />
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -228,7 +236,7 @@ export default function HomeScreen({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors) => StyleSheet.create({
   safe: {
     flex: 1,
     backgroundColor: colors.background,
@@ -507,4 +515,5 @@ const styles = StyleSheet.create({
     color: colors.textTertiary,
     fontWeight: '500',
   },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
 });

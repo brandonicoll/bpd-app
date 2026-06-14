@@ -48,7 +48,25 @@ export async function saveUserProfile(profile) {
 //   splitDays: [{ dayLabel, exercises: [exerciseId] }]
 // }
 export async function getCurrentProgram() {
-  return getItem(KEYS.CURRENT_PROGRAM);
+  const program = await getItem(KEYS.CURRENT_PROGRAM);
+  if (!program?.splitDays) return program;
+
+  let hasDuplicates = false;
+  const deduped = {
+    ...program,
+    splitDays: program.splitDays.map(day => {
+      const seen = new Set();
+      const exercises = day.exercises.filter(ex => {
+        if (seen.has(ex.exerciseId)) { hasDuplicates = true; return false; }
+        seen.add(ex.exerciseId);
+        return true;
+      });
+      return { ...day, exercises };
+    }),
+  };
+
+  if (hasDuplicates) await setItem(KEYS.CURRENT_PROGRAM, { ...deduped, updatedAt: new Date().toISOString() });
+  return deduped;
 }
 
 export async function saveCurrentProgram(program) {
@@ -243,7 +261,7 @@ export async function getLastSessionForExercise(exerciseId) {
   const lastSession = sorted[0];
   const exerciseData = lastSession.exercises.find(e => e.exerciseId === exerciseId);
   return exerciseData
-    ? { sets: exerciseData.sets, discomfortRating: exerciseData.discomfortRating, date: lastSession.date }
+    ? { sets: exerciseData.sets, discomfortRating: exerciseData.discomfortRating, notes: exerciseData.notes || '', date: lastSession.date }
     : null;
 }
 
@@ -348,6 +366,64 @@ export async function getWeightUnit() {
 
 export async function saveWeightUnit(unit) {
   await AsyncStorage.setItem(WEIGHT_UNIT_KEY, unit);
+}
+
+// ─── Draft session (auto-saved in-progress workout) ───────────
+const DRAFT_SESSION_KEY = 'draftSession';
+
+export async function saveDraftSession(data) {
+  try {
+    await AsyncStorage.setItem(DRAFT_SESSION_KEY, JSON.stringify({
+      ...data,
+      savedAt: new Date().toISOString(),
+    }));
+  } catch (e) {
+    console.error('saveDraftSession error:', e);
+  }
+}
+
+export async function getDraftSession() {
+  try {
+    const raw = await AsyncStorage.getItem(DRAFT_SESSION_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+export async function clearDraftSession() {
+  try {
+    await AsyncStorage.removeItem(DRAFT_SESSION_KEY);
+  } catch (e) {
+    console.error('clearDraftSession error:', e);
+  }
+}
+
+// ─── Change program split ─────────────────────────────────────
+// Rebuilds split days while preserving block/week position
+export async function changeProgramSplit({ splitType, daysPerWeek }) {
+  const current = await getCurrentProgram();
+  if (!current) return false;
+
+  const { buildDefaultProgram } = require('./programEngine');
+
+  const fresh = buildDefaultProgram({
+    trainingAge: current.trainingAge,
+    daysPerWeek,
+    splitType,
+  });
+
+  const merged = {
+    ...fresh,
+    currentBlock: current.currentBlock,
+    currentWeek: current.currentWeek,
+    startDate: current.startDate,
+    weakpoints: current.weakpoints || [],
+    createdAt: current.createdAt,
+    updatedAt: new Date().toISOString(),
+  };
+
+  return saveCurrentProgram(merged);
 }
 
 // ─── Clear all data (dev/testing only) ────────────────────────

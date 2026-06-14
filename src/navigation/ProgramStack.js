@@ -3,11 +3,12 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import ProgramOverviewScreen from '../screens/program/ProgramOverviewScreen';
 import ExerciseDetailScreen from '../screens/program/ExerciseDetailScreen';
 import ExerciseLibraryScreen from '../screens/program/ExerciseLibraryScreen';
-import { colors } from '../theme';
+import { useTheme } from '../theme/ThemeContext';
 
 const Stack = createNativeStackNavigator();
 
 export default function ProgramStack() {
+  const { colors } = useTheme();
   return (
     <Stack.Navigator
       screenOptions={{
