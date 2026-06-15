@@ -64,7 +64,7 @@ export default function StartWorkoutScreen({ navigation, route }) {
   function handleDiscardDraft() {
     Alert.alert(
       'Discard workout?',
-      `This will delete your unfinished ${draft?.splitDay?.dayLabel} session.`,
+      `This will delete your unfinished ${draft?.splitDay?.displayName || draft?.splitDay?.dayLabel} session.`,
       [
         { text: 'Keep it', style: 'cancel' },
         {
@@ -112,7 +112,7 @@ export default function StartWorkoutScreen({ navigation, route }) {
               <View style={styles.resumeCardLeft}>
                 <Text style={styles.resumeCardTitle}>Unfinished workout</Text>
                 <Text style={styles.resumeCardMeta}>
-                  {draft.splitDay?.dayLabel} · {formatDistanceToNow(draft.savedAt)}
+                  {draft.splitDay?.displayName || draft.splitDay?.dayLabel} · {formatDistanceToNow(draft.savedAt)}
                 </Text>
               </View>
               <View style={styles.resumeCardActions}>
@@ -156,7 +156,7 @@ export default function StartWorkoutScreen({ navigation, route }) {
                   styles.dayChipText,
                   selectedDay?.dayLabel === day.dayLabel && styles.dayChipTextSelected,
                 ]}>
-                  {day.dayLabel}
+                  {day.displayName || day.dayLabel}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -198,7 +198,7 @@ export default function StartWorkoutScreen({ navigation, route }) {
         {/* Start button */}
         <View style={styles.footer}>
           <Button
-            title={`Begin ${selectedDay?.dayLabel || 'workout'}`}
+            title={`Begin ${selectedDay?.displayName || selectedDay?.dayLabel || 'workout'}`}
             disabled={!selectedDay}
             onPress={() => navigation.navigate('ActiveWorkout', {
               splitDay: selectedDay,

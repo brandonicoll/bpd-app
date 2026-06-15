@@ -176,7 +176,7 @@ export default function HomeScreen({ navigation }) {
           <View style={styles.nextSessionCard}>
             <View style={styles.nextSessionInfo}>
               <Text style={styles.nextSessionLabel}>Up next</Text>
-              <Text style={styles.nextSessionName}>{nextSession?.dayLabel}</Text>
+              <Text style={styles.nextSessionName}>{nextSession?.displayName || nextSession?.dayLabel}</Text>
               <Text style={styles.nextSessionCount}>
                 {nextSession?.exercises?.length || 0} exercises
               </Text>

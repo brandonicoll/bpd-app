@@ -1,12 +1,60 @@
-import React from 'react';
-import { View, Text, StyleSheet, Switch, SafeAreaView, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, Switch, SafeAreaView, ScrollView, TouchableOpacity, ActionSheetIOS, Platform, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/ThemeContext';
 import { spacing, fontSizes, borderRadius } from '../../theme';
+import { getCurrentProgram, updateTrainingAge } from '../../services/storage';
+import { TRAINING_AGE } from '../../data/splits';
+
+const TRAINING_AGE_OPTIONS = [
+  { value: TRAINING_AGE.BEGINNER,     label: 'Beginner',     subtitle: '0–1 years — learning movements, building base strength' },
+  { value: TRAINING_AGE.INTERMEDIATE, label: 'Intermediate', subtitle: '1–3 years — solid form, progress comes slower' },
+  { value: TRAINING_AGE.ADVANCED,     label: 'Advanced',     subtitle: '4+ years — progress is hard-earned over months' },
+];
 
 export default function SettingsScreen({ navigation }) {
   const { colors, isDark, toggleTheme } = useTheme();
   const styles = makeStyles(colors);
+  const [trainingAge, setTrainingAge] = useState(null);
+
+  useEffect(() => {
+    getCurrentProgram().then(p => {
+      if (p?.trainingAge) setTrainingAge(p.trainingAge);
+    });
+  }, []);
+
+  function handleChangeTrainingAge() {
+    const sheetOptions = [...TRAINING_AGE_OPTIONS.map(o => o.label), 'Cancel'];
+
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        { options: sheetOptions, cancelButtonIndex: sheetOptions.length - 1, title: 'Training experience' },
+        async (index) => {
+          if (index >= TRAINING_AGE_OPTIONS.length) return;
+          const newAge = TRAINING_AGE_OPTIONS[index].value;
+          await updateTrainingAge(newAge);
+          setTrainingAge(newAge);
+        }
+      );
+    } else {
+      Alert.alert(
+        'Training experience',
+        'How long have you been training seriously?',
+        [
+          ...TRAINING_AGE_OPTIONS.map(o => ({
+            text: o.label,
+            onPress: async () => {
+              await updateTrainingAge(o.value);
+              setTrainingAge(o.value);
+            },
+          })),
+          { text: 'Cancel', style: 'cancel' },
+        ]
+      );
+    }
+  }
+
+  const currentOption = TRAINING_AGE_OPTIONS.find(o => o.value === trainingAge);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -19,6 +67,19 @@ export default function SettingsScreen({ navigation }) {
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Training profile</Text>
+          <TouchableOpacity style={styles.row} onPress={handleChangeTrainingAge} activeOpacity={0.7}>
+            <View style={styles.rowLeft}>
+              <Text style={styles.rowTitle}>Training experience</Text>
+              <Text style={styles.rowSubtitle}>
+                {currentOption ? `${currentOption.label} — ${currentOption.subtitle}` : 'Tap to set'}
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={colors.textTertiary} />
+          </TouchableOpacity>
+        </View>
+
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>Appearance</Text>
           <View style={styles.row}>

@@ -10,7 +10,7 @@ let _customExercises = [];
 function findExercise(id) {
   return exerciseLibrary.find(e => e.id === id) || _customExercises.find(e => e.id === id);
 }
-import { PLATEAU_THRESHOLDS } from '../data/splits';
+import { PLATEAU_THRESHOLDS, TRAINING_AGE } from '../data/splits';
 import { JOINT_ACTION_LABELS } from '../data/jointActionLabels';
 import { getWeekStart } from '../utils/dateHelpers';
 
@@ -345,9 +345,16 @@ function checkJointActionVolume(program, allSessions, jointActionMetrics) {
 }
 
 // ─── Rule 2: Progress stalls ─────────────────────────────────────────────────
+const TRAINING_AGE_PROGRESS_CONTEXT = {
+  [TRAINING_AGE.BEGINNER]:     'As a beginner, you should progress most sessions — a stall this early likely means a quick fix is needed.',
+  [TRAINING_AGE.INTERMEDIATE]: 'At the intermediate level, weekly progress is less guaranteed. A stall over this window is a clear signal to adjust something.',
+  [TRAINING_AGE.ADVANCED]:     'Advanced lifters progress slowly by nature. A stall over this window is meaningful and warrants a deliberate change.',
+};
+
 function checkProgressStalls(program, allSessions, checkIns, exerciseTrends, jointActionMetrics) {
   const recommendations = [];
   const threshold = PLATEAU_THRESHOLDS[program.trainingAge] || 4;
+  const progressContext = TRAINING_AGE_PROGRESS_CONTEXT[program.trainingAge] || '';
 
   const recentCheckIns = [...checkIns]
     .sort((a, b) => new Date(b.weekStartDate) - new Date(a.weekStartDate))
@@ -403,7 +410,7 @@ function checkProgressStalls(program, allSessions, checkIns, exerciseTrends, joi
           exerciseId,
           dayLabel: splitDay.dayLabel,
           title: `Progress stall: ${exDef.name}`,
-          description: `${exDef.name} has stalled over your last ${threshold} sessions (e1RM: ${firstE1RM}kg → ${lastE1RM}kg). Your nutrition check-ins suggest you've been off track — address that before changing programming.`,
+          description: `${exDef.name} has stalled over your last ${threshold} sessions (e1RM: ${firstE1RM}kg → ${lastE1RM}kg). Your nutrition check-ins suggest you've been off track — address that before changing programming. ${progressContext}`,
           guideRule: 'First identify if the issues even stem from your programming. Make sure your nutrition, stress, and sleep are all good first.',
           actionLabel: null, actionType: null,
           dataPoint: `e1RM ${firstE1RM}kg → ${lastE1RM}kg over ${threshold} sessions`,
@@ -422,7 +429,7 @@ function checkProgressStalls(program, allSessions, checkIns, exerciseTrends, joi
           exerciseId,
           dayLabel: splitDay.dayLabel,
           title: `Progress stall: ${exDef.name}`,
-          description: `${exDef.name} is a high-coordination movement that has stalled over ${threshold} sessions. Try dropping to a lower rep range (4–6 reps) to reduce fatigue while still providing sufficient growth stimulus.`,
+          description: `${exDef.name} is a high-coordination movement that has stalled over ${threshold} sessions. Try dropping to a lower rep range (4–6 reps) to reduce fatigue while still providing sufficient growth stimulus. ${progressContext}`,
           guideRule: 'For lifts that require a lot of coordination and technique that stall, attempt to lower the rep ranges. Lower rep ranges allow us to reach the same stimulus with less fatigue.',
           actionLabel: null, actionType: null,
           dataPoint: `e1RM ${firstE1RM}kg → ${lastE1RM}kg over ${threshold} sessions`,
@@ -465,7 +472,7 @@ function checkProgressStalls(program, allSessions, checkIns, exerciseTrends, joi
           exerciseId,
           dayLabel: splitDay.dayLabel,
           title: `Add a set: ${exDef.name}`,
-          description: `${exDef.name} has stalled over ${threshold} sessions (e1RM: ${firstE1RM}kg → ${lastE1RM}kg), but your average RPE is ${avgRPE.toFixed(1)} and discomfort is low — your body is handling the current load comfortably without responding to it. The stimulus isn't enough. Try adding 1 set for 2–3 weeks. If progress resumes, keep it. If fatigue increases, remove the extra set.`,
+          description: `${exDef.name} has stalled over ${threshold} sessions (e1RM: ${firstE1RM}kg → ${lastE1RM}kg), but your average RPE is ${avgRPE.toFixed(1)} and discomfort is low — your body is handling the current load comfortably without responding to it. The stimulus isn't enough. Try adding 1 set for 2–3 weeks. If progress resumes, keep it. If fatigue increases, remove the extra set. ${progressContext}`,
           guideRule: 'If you find a muscle group is always recovered but is lagging, then try out 1–2 more sets per week directed towards that muscle group until you can find the upper threshold.',
           actionLabel: null, actionType: null,
           dataPoint: `Avg RPE: ${avgRPE.toFixed(1)} · Avg discomfort: ${avgDiscomfort.toFixed(1)}/10 · e1RM flat over ${threshold} sessions`,
@@ -480,7 +487,7 @@ function checkProgressStalls(program, allSessions, checkIns, exerciseTrends, joi
           exerciseId,
           dayLabel: splitDay.dayLabel,
           title: `Reduce intensity: ${exDef.name}`,
-          description: `${exDef.name} has stalled over ${threshold} sessions (e1RM: ${firstE1RM}kg → ${lastE1RM}kg)${rpeNote}. Fatigue may be limiting recovery. Try reducing your RPE target by 1 point for a few sessions to allow fuller recovery between workouts.`,
+          description: `${exDef.name} has stalled over ${threshold} sessions (e1RM: ${firstE1RM}kg → ${lastE1RM}kg)${rpeNote}. Fatigue may be limiting recovery. Try reducing your RPE target by 1 point for a few sessions to allow fuller recovery between workouts. ${progressContext}`,
           guideRule: 'For highly fatiguing lifts that stall in progression, adjust the RPEs lower. This will help us recover better and prevent fatigue bleeding into later lifts.',
           actionLabel: null, actionType: null,
           dataPoint: avgRPE !== null
@@ -628,6 +635,7 @@ async function calculateExerciseTrends(program, allSessions) {
       if (!exerciseSessions.length) {
         trends.push({
           exerciseId, exerciseName: exDef.name, dayLabel: splitDay.dayLabel,
+          displayName: splitDay.displayName || null,
           sessionsLogged: 0, firstE1RM: 0, lastE1RM: 0, deltaPercent: 0,
           trend: 'no_data', avgDiscomfort: 0, discomfortFlag: false, lastDate: null,
         });
@@ -665,6 +673,7 @@ async function calculateExerciseTrends(program, allSessions) {
         exerciseId,
         exerciseName: exDef.name,
         dayLabel: splitDay.dayLabel,
+        displayName: splitDay.displayName || null,
         sessionsLogged: exerciseSessions.length,
         firstE1RM, lastE1RM,
         deltaPercent: Math.round(deltaPercent * 10) / 10,

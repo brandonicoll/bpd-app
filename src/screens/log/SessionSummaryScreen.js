@@ -77,7 +77,7 @@ export default function SessionSummaryScreen({ navigation, route }) {
           <View style={styles.checkBadge}>
             <Ionicons name="checkmark" size={28} color="#fff" />
           </View>
-          <Text style={styles.headline}>{session.splitDayLabel} done.</Text>
+          <Text style={styles.headline}>{session.splitDayDisplayName || session.splitDayLabel} done.</Text>
           <Text style={styles.subheadline}>
             {new Date(startTime).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
           </Text>

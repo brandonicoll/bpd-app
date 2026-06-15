@@ -366,6 +366,30 @@ export async function setExerciseOrderForDay(dayLabel, orderedExercises) {
   return saveCurrentProgram({ ...program, splitDays: updatedSplitDays });
 }
 
+// Set or clear a display name for a program day (dayLabel stays as the internal key)
+export async function renameProgramDay(dayLabel, displayName) {
+  const program = await getCurrentProgram();
+  if (!program) return false;
+  const trimmed = displayName?.trim();
+  const updatedSplitDays = program.splitDays.map(day => {
+    if (day.dayLabel !== dayLabel) return day;
+    if (trimmed) return { ...day, displayName: trimmed };
+    const { displayName: _removed, ...rest } = day;
+    return rest;
+  });
+  return saveCurrentProgram({ ...program, splitDays: updatedSplitDays });
+}
+
+// Update training age on both program and user profile
+export async function updateTrainingAge(trainingAge) {
+  const [program, profile] = await Promise.all([getCurrentProgram(), getUserProfile()]);
+  const results = await Promise.all([
+    program ? saveCurrentProgram({ ...program, trainingAge }) : Promise.resolve(false),
+    profile ? saveUserProfile({ ...profile, trainingAge }) : Promise.resolve(false),
+  ]);
+  return results.some(Boolean);
+}
+
 // ─── Weight unit preference ────────────────────────────────────
 const WEIGHT_UNIT_KEY = 'weightUnit';
 

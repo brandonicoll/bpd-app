@@ -10,6 +10,7 @@ import { useTheme } from '../../theme/ThemeContext';
 import {
   getCurrentProgram, swapExerciseInProgram, getCustomExercises,
   addExerciseToProgram, removeExerciseFromProgram, setExerciseOrderForDay,
+  renameProgramDay,
 } from '../../services/storage';
 import { getCurrentBlockInfo } from '../../services/programEngine';
 import { exercises as exerciseLibrary, getSwapCandidates } from '../../data/exercises';
@@ -575,6 +576,11 @@ export default function ProgramOverviewScreen({ navigation }) {
     setAddModal({ visible: true, dayLabel, existingIds });
   }
 
+  async function handleRenameDay(dayLabel, displayName) {
+    await renameProgramDay(dayLabel, displayName);
+    load();
+  }
+
   function closeAddModal() {
     setAddModal({ visible: false, dayLabel: null, existingIds: [] });
   }
@@ -688,7 +694,34 @@ export default function ProgramOverviewScreen({ navigation }) {
                 <View style={styles.dayIndexBadge}>
                   <Text style={styles.dayIndexText}>{dayIndex + 1}</Text>
                 </View>
-                <Text style={styles.dayLabel}>{day.dayLabel}</Text>
+                {isEditing ? (
+                  <TouchableOpacity
+                    style={styles.dayLabelEditable}
+                    activeOpacity={0.7}
+                    onPress={() => Alert.prompt(
+                      'Rename day',
+                      null,
+                      [
+                        { text: 'Cancel', style: 'cancel' },
+                        { text: 'Save', onPress: (text) => {
+                          const trimmed = text?.trim();
+                          if (trimmed) handleRenameDay(day.dayLabel, trimmed);
+                        }},
+                      ],
+                      'plain-text',
+                      day.displayName || day.dayLabel,
+                    )}
+                  >
+                    <Text style={[styles.dayLabel, styles.dayLabelEditActive]} numberOfLines={1}>
+                      {day.displayName || day.dayLabel}
+                    </Text>
+                    <Ionicons name="pencil" size={12} color={colors.primary} style={{ marginLeft: 4 }} />
+                  </TouchableOpacity>
+                ) : (
+                  <Text style={styles.dayLabel} numberOfLines={1}>
+                    {day.displayName || day.dayLabel}
+                  </Text>
+                )}
                 <Text style={styles.exerciseCount}>{day.exercises.length} exercises</Text>
                 <TouchableOpacity
                   onPress={() => setEditingDay(isEditing ? null : day.dayLabel)}
@@ -952,6 +985,8 @@ const makeStyles = (colors) => StyleSheet.create({
   },
   dayIndexText: { fontSize: fontSizes.xs, fontWeight: '700', color: '#fff' },
   dayLabel: { flex: 1, fontSize: fontSizes.md, fontWeight: '700', color: colors.text },
+  dayLabelEditable: { flex: 1, flexDirection: 'row', alignItems: 'center' },
+  dayLabelEditActive: { flex: 0, color: colors.primary },
   exerciseCount: { fontSize: fontSizes.xs, color: colors.textTertiary, fontWeight: '500' },
 
   // Exercise row

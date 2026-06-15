@@ -709,6 +709,7 @@ export default function ActiveWorkoutScreen({ navigation, route }) {
         id: uuidv4(),
         date: startTime.current,
         splitDayLabel: splitDay.dayLabel,
+        splitDayDisplayName: splitDay.displayName || null,
         startTime: startTime.current,
         endTime,
         weightUnit,
@@ -782,7 +783,7 @@ export default function ActiveWorkoutScreen({ navigation, route }) {
           </TouchableOpacity>
 
           <View style={styles.headerCenter}>
-            <Text style={styles.headerTitle}>{splitDay.dayLabel}</Text>
+            <Text style={styles.headerTitle}>{splitDay.displayName || splitDay.dayLabel}</Text>
             <TouchableOpacity onPress={toggleWeightUnit} style={styles.unitToggle} activeOpacity={0.7}>
               <Text style={styles.unitToggleText}>{weightUnit}</Text>
             </TouchableOpacity>
