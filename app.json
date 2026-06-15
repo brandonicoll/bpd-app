@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "BPF Programming",
-    "slug": "bpf-programming",
+    "slug": "bpf-app",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -9,16 +9,17 @@
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#F8F7F4"
+      "backgroundColor": "#121212"
     },
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.bpfcoaching.programming",
-      "buildNumber": "1",
+      "buildNumber": "5",
       "infoPlist": {
         "NSCameraUsageDescription": "Used for sharing your progress card.",
         "NSPhotoLibraryUsageDescription": "Used to save your progress card to your photo library.",
-        "NSPhotoLibraryAddUsageDescription": "Used to save your progress card to your photo library."
+        "NSPhotoLibraryAddUsageDescription": "Used to save your progress card to your photo library.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -26,7 +27,7 @@
       "versionCode": 1,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#534AB7"
+        "backgroundColor": "#121212"
       }
     },
     "plugins": [

@@ -249,7 +249,7 @@ const makePickerStyles = (colors) => StyleSheet.create({
 function ExerciseCard({
   exerciseData, exerciseDef, exConfig, currentBlock, weightUnit,
   previousData, onSetUpdate, onSetAdd, onSetDelete, onDiscomfortChange,
-  onNotesChange, onManage, drag, isActive,
+  onNotesChange, onManage, drag, isActive, isPreCollapsing,
 }) {
   const { colors } = useTheme();
   const exStyles = makeExStyles(colors);
@@ -257,8 +257,19 @@ function ExerciseCard({
   const rpeGuidance = getExerciseRPEGuidance(exConfig, currentBlock);
   const prevSets = previousData?.sets || [];
 
+  if (isActive || isPreCollapsing) {
+    return (
+      <View style={exStyles.cardCollapsed}>
+        <TouchableOpacity onLongPress={drag} delayLongPress={150} style={exStyles.dragHandle} hitSlop={{ top: 8, bottom: 8, left: 4, right: 8 }}>
+          <Ionicons name="reorder-three-outline" size={22} color={colors.primary} />
+        </TouchableOpacity>
+        <Text style={exStyles.nameCollapsed}>{exerciseDef.name}</Text>
+      </View>
+    );
+  }
+
   return (
-    <View style={[exStyles.card, isActive && exStyles.cardActive]}>
+    <View style={exStyles.card}>
       <View style={exStyles.header}>
         <TouchableOpacity onLongPress={drag} delayLongPress={150} style={exStyles.dragHandle} hitSlop={{ top: 8, bottom: 8, left: 4, right: 8 }}>
           <Ionicons name="reorder-three-outline" size={22} color={colors.textTertiary} />
@@ -378,7 +389,18 @@ const makeExStyles = (colors) => StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: spacing.sm },
   dragHandle: { paddingRight: spacing.sm, paddingTop: 2 },
   headerLeft: { flex: 1 },
-  cardActive: { opacity: 0.95, shadowOpacity: 0.18, elevation: 6 },
+  cardCollapsed: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: colors.primary,
+    opacity: 0.92,
+  },
+  nameCollapsed: { flex: 1, fontSize: fontSizes.md, fontWeight: '700', color: colors.text },
   name: { fontSize: fontSizes.lg, fontWeight: '700', color: colors.text, marginBottom: 2 },
   range: { fontSize: fontSizes.xs, color: colors.textSecondary },
   manageBtn: { paddingLeft: spacing.sm },
@@ -444,6 +466,7 @@ export default function ActiveWorkoutScreen({ navigation, route }) {
   const createCustomContextRef = useRef(null);
   const [customExercises, setCustomExercises] = useState([]);
   const [showCreateCustom, setShowCreateCustom] = useState(false);
+  const [preCollapseId, setPreCollapseId] = useState(null);
 
   const allExercises = useMemo(
     () => [...exerciseLibrary, ...customExercises],
@@ -779,16 +802,28 @@ export default function ActiveWorkoutScreen({ navigation, route }) {
 
         <DraggableFlatList
           data={sessionExercises}
-          onDragEnd={({ data }) => setSessionExercises(data)}
+          onDragEnd={({ data }) => { setSessionExercises(data); setPreCollapseId(null); }}
           keyExtractor={(item, i) => `${item.exerciseId}-${i}`}
-          style={styles.scroll}
+          containerStyle={styles.scroll}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
-          renderItem={({ item: exData, drag, isActive, getIndex }) => {
+          renderPlaceholder={({ item }) => {
+            const exDef = allExercises.find(e => e.id === item.exerciseId);
+            return (
+              <View style={styles.dragPlaceholder}>
+                <Text style={styles.dragPlaceholderText} numberOfLines={1}>{exDef?.name}</Text>
+              </View>
+            );
+          }}
+          renderItem={({ item: exData, drag: originalDrag, isActive, getIndex }) => {
             const exIndex = getIndex() ?? 0;
             const exDef = allExercises.find(e => e.id === exData.exerciseId);
             if (!exDef) return null;
+            const drag = () => {
+              setPreCollapseId(exData.exerciseId);
+              originalDrag();
+            };
             return (
               <ScaleDecorator>
                 <ExerciseCard
@@ -806,6 +841,7 @@ export default function ActiveWorkoutScreen({ navigation, route }) {
                   onManage={() => handleManageExercise(exIndex)}
                   drag={drag}
                   isActive={isActive}
+                  isPreCollapsing={preCollapseId === exData.exerciseId}
                 />
               </ScaleDecorator>
             );
@@ -903,4 +939,13 @@ const makeStyles = (colors) => StyleSheet.create({
     height: 52, alignItems: 'center', justifyContent: 'center', marginTop: spacing.xs,
   },
   bottomFinishText: { color: '#fff', fontWeight: '700', fontSize: fontSizes.md },
+  dragPlaceholder: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: colors.primaryLight,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1.5, borderColor: colors.primary, borderStyle: 'dashed',
+    paddingHorizontal: spacing.md, paddingVertical: spacing.md,
+    marginBottom: spacing.md,
+  },
+  dragPlaceholderText: { flex: 1, fontSize: fontSizes.md, fontWeight: '700', color: colors.primary, opacity: 0.6 },
 });

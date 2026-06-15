@@ -16,7 +16,7 @@ import { exercises as exerciseLibrary, getSwapCandidates } from '../../data/exer
 import { JOINT_ACTION_LABELS } from '../../data/jointActionLabels';
 import CustomExerciseModal from '../../components/common/CustomExerciseModal';
 import ChangeSplitModal from '../../components/program/ChangeSplitModal';
-import { NestableDraggableFlatList, NestableScrollView, ScaleDecorator } from 'react-native-draggable-flatlist';
+import { NestableDraggableFlatList, NestableScrollContainer, ScaleDecorator } from 'react-native-draggable-flatlist';
 
 function getExercise(id) {
   return exerciseLibrary.find(e => e.id === id);
@@ -618,7 +618,7 @@ export default function ProgramOverviewScreen({ navigation }) {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <NestableScrollView
+      <NestableScrollContainer
         style={styles.scroll}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
@@ -791,7 +791,7 @@ export default function ProgramOverviewScreen({ navigation }) {
           <Text style={styles.libraryLinkText}>Browse full exercise library</Text>
           <Ionicons name="chevron-forward" size={16} color={colors.primary} />
         </TouchableOpacity>
-      </NestableScrollView>
+      </NestableScrollContainer>
 
       {/* Swap modal */}
       <SwapModal
