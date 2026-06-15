@@ -356,6 +356,16 @@ export async function reorderExerciseInProgram(dayLabel, exerciseId, direction) 
   return saveCurrentProgram({ ...program, splitDays: updatedSplitDays });
 }
 
+// Set the full ordered exercise list for a day (used after drag-to-reorder)
+export async function setExerciseOrderForDay(dayLabel, orderedExercises) {
+  const program = await getCurrentProgram();
+  if (!program) return false;
+  const updatedSplitDays = program.splitDays.map(day =>
+    day.dayLabel === dayLabel ? { ...day, exercises: orderedExercises } : day
+  );
+  return saveCurrentProgram({ ...program, splitDays: updatedSplitDays });
+}
+
 // ─── Weight unit preference ────────────────────────────────────
 const WEIGHT_UNIT_KEY = 'weightUnit';
 

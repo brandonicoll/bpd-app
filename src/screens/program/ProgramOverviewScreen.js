@@ -9,13 +9,14 @@ import { spacing, fontSizes, borderRadius } from '../../theme';
 import { useTheme } from '../../theme/ThemeContext';
 import {
   getCurrentProgram, swapExerciseInProgram, getCustomExercises,
-  reorderExerciseInProgram, addExerciseToProgram, removeExerciseFromProgram,
+  addExerciseToProgram, removeExerciseFromProgram, setExerciseOrderForDay,
 } from '../../services/storage';
 import { getCurrentBlockInfo } from '../../services/programEngine';
 import { exercises as exerciseLibrary, getSwapCandidates } from '../../data/exercises';
 import { JOINT_ACTION_LABELS } from '../../data/jointActionLabels';
 import CustomExerciseModal from '../../components/common/CustomExerciseModal';
 import ChangeSplitModal from '../../components/program/ChangeSplitModal';
+import { NestableDraggableFlatList, NestableScrollView, ScaleDecorator } from 'react-native-draggable-flatlist';
 
 function getExercise(id) {
   return exerciseLibrary.find(e => e.id === id);
@@ -578,6 +579,11 @@ export default function ProgramOverviewScreen({ navigation }) {
     setAddModal({ visible: false, dayLabel: null, existingIds: [] });
   }
 
+  async function handleReorderDay(dayLabel, reorderedExercises) {
+    await setExerciseOrderForDay(dayLabel, reorderedExercises);
+    load();
+  }
+
   function handleDeleteExercise(dayLabel, exerciseId, count) {
     if (count <= 1) {
       Alert.alert('Cannot remove', 'Each day must have at least one exercise.');
@@ -612,7 +618,7 @@ export default function ProgramOverviewScreen({ navigation }) {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <ScrollView
+      <NestableScrollView
         style={styles.scroll}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
@@ -698,70 +704,68 @@ export default function ProgramOverviewScreen({ navigation }) {
               </View>
 
               {/* Exercise rows */}
-              {day.exercises.map((exConfig, exIndex) => {
-                const ex = getExercise(exConfig.exerciseId);
-                if (!ex) return null;
-                const isFirst = exIndex === 0;
-                const isLast = exIndex === day.exercises.length - 1;
-                return (
-                  <View key={`${exConfig.exerciseId}-${exIndex}`} style={styles.exRow}>
-                    <TouchableOpacity
-                      style={styles.exInfo}
-                      activeOpacity={0.7}
-                      onPress={() => navigation.navigate('ExerciseDetail', {
-                        exerciseId: exConfig.exerciseId,
-                        dayLabel: day.dayLabel,
-                      })}
-                    >
-                      <View style={[styles.exIndexDot, isFirst && styles.exIndexDotFirst]} />
-                      <View style={styles.exTextGroup}>
-                        <Text style={styles.exName}>{ex.name}</Text>
-                        <Text style={styles.exMeta}>
-                          {exConfig.sets} × {exConfig.repRange[0]}–{exConfig.repRange[1]} reps · RPE {exConfig.rpe}
-                        </Text>
-                      </View>
-                    </TouchableOpacity>
-
-                    {isEditing ? (
-                      <TouchableOpacity
-                        onPress={() => handleDeleteExercise(day.dayLabel, exConfig.exerciseId, day.exercises.length)}
-                        style={styles.deleteBtn}
-                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                      >
-                        <Ionicons name="trash-outline" size={18} color="#E53E3E" />
-                      </TouchableOpacity>
-                    ) : (
-                      <>
-                        <View style={styles.reorderBtns}>
-                          <TouchableOpacity
-                            onPress={async () => { await reorderExerciseInProgram(day.dayLabel, exConfig.exerciseId, 'up'); load(); }}
-                            disabled={isFirst}
-                            hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
-                            style={[styles.reorderBtn, isFirst && styles.reorderBtnDisabled]}
-                          >
-                            <Ionicons name="chevron-up" size={12} color={isFirst ? colors.textTertiary : colors.textSecondary} />
-                          </TouchableOpacity>
-                          <TouchableOpacity
-                            onPress={async () => { await reorderExerciseInProgram(day.dayLabel, exConfig.exerciseId, 'down'); load(); }}
-                            disabled={isLast}
-                            hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
-                            style={[styles.reorderBtn, isLast && styles.reorderBtnDisabled]}
-                          >
-                            <Ionicons name="chevron-down" size={12} color={isLast ? colors.textTertiary : colors.textSecondary} />
-                          </TouchableOpacity>
-                        </View>
+              <NestableDraggableFlatList
+                data={day.exercises}
+                keyExtractor={(item, i) => `${item.exerciseId}-${i}`}
+                onDragEnd={({ data }) => handleReorderDay(day.dayLabel, data)}
+                scrollEnabled={false}
+                renderItem={({ item: exConfig, drag, isActive, getIndex }) => {
+                  const ex = getExercise(exConfig.exerciseId);
+                  if (!ex) return null;
+                  const exIndex = getIndex() ?? 0;
+                  const isFirst = exIndex === 0;
+                  return (
+                    <ScaleDecorator>
+                      <View style={[styles.exRow, isActive && styles.exRowActive]}>
                         <TouchableOpacity
-                          onPress={() => openSwap(exConfig.exerciseId, day.dayLabel)}
-                          style={styles.swapBtn}
-                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                          style={styles.exInfo}
+                          activeOpacity={0.7}
+                          onPress={() => navigation.navigate('ExerciseDetail', {
+                            exerciseId: exConfig.exerciseId,
+                            dayLabel: day.dayLabel,
+                          })}
                         >
-                          <Ionicons name="swap-horizontal" size={18} color={colors.textSecondary} />
+                          <View style={[styles.exIndexDot, isFirst && styles.exIndexDotFirst]} />
+                          <View style={styles.exTextGroup}>
+                            <Text style={styles.exName}>{ex.name}</Text>
+                            <Text style={styles.exMeta}>
+                              {exConfig.sets} × {exConfig.repRange[0]}–{exConfig.repRange[1]} reps · RPE {exConfig.rpe}
+                            </Text>
+                          </View>
                         </TouchableOpacity>
-                      </>
-                    )}
-                  </View>
-                );
-              })}
+
+                        {isEditing ? (
+                          <TouchableOpacity
+                            onPress={() => handleDeleteExercise(day.dayLabel, exConfig.exerciseId, day.exercises.length)}
+                            style={styles.deleteBtn}
+                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                          >
+                            <Ionicons name="trash-outline" size={18} color="#E53E3E" />
+                          </TouchableOpacity>
+                        ) : (
+                          <>
+                            <TouchableOpacity
+                              onLongPress={drag}
+                              delayLongPress={150}
+                              style={styles.dragHandle}
+                              hitSlop={{ top: 8, bottom: 8, left: 8, right: 4 }}
+                            >
+                              <Ionicons name="reorder-three-outline" size={20} color={colors.textTertiary} />
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              onPress={() => openSwap(exConfig.exerciseId, day.dayLabel)}
+                              style={styles.swapBtn}
+                              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                            >
+                              <Ionicons name="swap-horizontal" size={18} color={colors.textSecondary} />
+                            </TouchableOpacity>
+                          </>
+                        )}
+                      </View>
+                    </ScaleDecorator>
+                  );
+                }}
+              />
 
               {/* Add exercise row — edit mode only */}
               {isEditing && (
@@ -787,7 +791,7 @@ export default function ProgramOverviewScreen({ navigation }) {
           <Text style={styles.libraryLinkText}>Browse full exercise library</Text>
           <Ionicons name="chevron-forward" size={16} color={colors.primary} />
         </TouchableOpacity>
-      </ScrollView>
+      </NestableScrollView>
 
       {/* Swap modal */}
       <SwapModal
@@ -971,21 +975,11 @@ const makeStyles = (colors) => StyleSheet.create({
   exIndexDotFirst: {
     backgroundColor: colors.primary,
   },
-  reorderBtns: {
-    flexDirection: 'column',
-    marginLeft: spacing.xs,
-    gap: 1,
-  },
-  reorderBtn: {
-    width: 22,
-    height: 20,
-    alignItems: 'center',
+  exRowActive: { opacity: 0.95, shadowOpacity: 0.12, elevation: 4 },
+  dragHandle: {
+    paddingHorizontal: spacing.xs,
     justifyContent: 'center',
-    borderRadius: 4,
-    backgroundColor: colors.gray100,
-  },
-  reorderBtnDisabled: {
-    opacity: 0.25,
+    alignItems: 'center',
   },
   exTextGroup: { flex: 1 },
   exName: { fontSize: fontSizes.sm, fontWeight: '600', color: colors.text },

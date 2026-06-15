@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TextInput,
+  View, Text, StyleSheet, TextInput,
   TouchableOpacity, SafeAreaView, Alert, KeyboardAvoidingView,
   Platform, ActivityIndicator, Modal, FlatList,
 } from 'react-native';
@@ -19,6 +19,7 @@ import {
   clearDraftSession,
   getCustomExercises,
 } from '../../services/storage';
+import DraggableFlatList, { ScaleDecorator } from 'react-native-draggable-flatlist';
 import CustomExerciseModal from '../../components/common/CustomExerciseModal';
 import { exercises as exerciseLibrary } from '../../data/exercises';
 import {
@@ -248,7 +249,7 @@ const makePickerStyles = (colors) => StyleSheet.create({
 function ExerciseCard({
   exerciseData, exerciseDef, exConfig, currentBlock, weightUnit,
   previousData, onSetUpdate, onSetAdd, onSetDelete, onDiscomfortChange,
-  onNotesChange, onManage,
+  onNotesChange, onManage, drag, isActive,
 }) {
   const { colors } = useTheme();
   const exStyles = makeExStyles(colors);
@@ -257,8 +258,11 @@ function ExerciseCard({
   const prevSets = previousData?.sets || [];
 
   return (
-    <View style={exStyles.card}>
+    <View style={[exStyles.card, isActive && exStyles.cardActive]}>
       <View style={exStyles.header}>
+        <TouchableOpacity onLongPress={drag} delayLongPress={150} style={exStyles.dragHandle} hitSlop={{ top: 8, bottom: 8, left: 4, right: 8 }}>
+          <Ionicons name="reorder-three-outline" size={22} color={colors.textTertiary} />
+        </TouchableOpacity>
         <View style={exStyles.headerLeft}>
           <Text style={exStyles.name}>{exerciseDef.name}</Text>
           <Text style={exStyles.range}>
@@ -371,8 +375,10 @@ const makeExStyles = (colors) => StyleSheet.create({
     padding: spacing.md,
     marginBottom: spacing.md,
   },
-  header: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: spacing.sm },
+  header: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: spacing.sm },
+  dragHandle: { paddingRight: spacing.sm, paddingTop: 2 },
   headerLeft: { flex: 1 },
+  cardActive: { opacity: 0.95, shadowOpacity: 0.18, elevation: 6 },
   name: { fontSize: fontSizes.lg, fontWeight: '700', color: colors.text, marginBottom: 2 },
   range: { fontSize: fontSizes.xs, color: colors.textSecondary },
   manageBtn: { paddingLeft: spacing.sm },
@@ -434,6 +440,8 @@ export default function ActiveWorkoutScreen({ navigation, route }) {
   const [previousData, setPreviousData] = useState({});
   const [finishing, setFinishing] = useState(false);
   const [pickerMode, setPickerMode] = useState(null); // null | 'add' | { mode: 'swap', index: number }
+  const pickerModeRef = useRef(null);
+  const createCustomContextRef = useRef(null);
   const [customExercises, setCustomExercises] = useState([]);
   const [showCreateCustom, setShowCreateCustom] = useState(false);
 
@@ -558,7 +566,11 @@ export default function ActiveWorkoutScreen({ navigation, route }) {
       [
         {
           text: 'Swap exercise',
-          onPress: () => setPickerMode({ mode: 'swap', index: exIndex }),
+          onPress: () => {
+            const mode = { mode: 'swap', index: exIndex };
+            pickerModeRef.current = mode;
+            setPickerMode(mode);
+          },
         },
         {
           text: 'Delete exercise',
@@ -588,6 +600,7 @@ export default function ActiveWorkoutScreen({ navigation, route }) {
   }
 
   async function handlePickerSelect(exerciseDef) {
+    const mode = pickerModeRef.current;
     const exConfig = {
       exerciseId: exerciseDef.id,
       sets: 3,
@@ -604,16 +617,19 @@ export default function ActiveWorkoutScreen({ navigation, route }) {
       })),
     };
 
-    if (pickerMode === 'add') {
+    if (mode === 'add') {
       setSessionExercises(prev => [...prev, newEx]);
-    } else if (pickerMode?.mode === 'swap') {
-      setSessionExercises(prev => prev.map((ex, i) => i === pickerMode.index ? newEx : ex));
+    } else if (mode?.mode === 'swap') {
+      setSessionExercises(prev => prev.map((ex, i) => i === mode.index ? newEx : ex));
     }
 
     await loadPreviousData([exerciseDef.id]);
   }
 
   async function handleCustomExerciseCreated(exercise) {
+    const ctx = createCustomContextRef.current;
+    createCustomContextRef.current = null;
+
     const updatedCustom = await getCustomExercises();
     setCustomExercises(updatedCustom);
     setShowCreateCustom(false);
@@ -632,7 +648,11 @@ export default function ActiveWorkoutScreen({ navigation, route }) {
         weight: '', reps: '', rpe: null, completedAt: new Date().toISOString(),
       })),
     };
-    setSessionExercises(prev => [...prev, newEx]);
+    if (ctx?.mode === 'swap') {
+      setSessionExercises(prev => prev.map((ex, i) => i === ctx.index ? newEx : ex));
+    } else {
+      setSessionExercises(prev => [...prev, newEx]);
+    }
     await loadPreviousData([exercise.id]);
   }
 
@@ -757,68 +777,83 @@ export default function ActiveWorkoutScreen({ navigation, route }) {
           </TouchableOpacity>
         </View>
 
-        <ScrollView
+        <DraggableFlatList
+          data={sessionExercises}
+          onDragEnd={({ data }) => setSessionExercises(data)}
+          keyExtractor={(item, i) => `${item.exerciseId}-${i}`}
           style={styles.scroll}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
-        >
-          {sessionExercises.map((exData, exIndex) => {
+          renderItem={({ item: exData, drag, isActive, getIndex }) => {
+            const exIndex = getIndex() ?? 0;
             const exDef = allExercises.find(e => e.id === exData.exerciseId);
             if (!exDef) return null;
             return (
-              <ExerciseCard
-                key={`${exData.exerciseId}-${exIndex}`}
-                exerciseData={exData}
-                exerciseDef={exDef}
-                exConfig={exData.exConfig}
-                currentBlock={currentBlock}
-                weightUnit={weightUnit}
-                previousData={previousData[exData.exerciseId]}
-                onSetUpdate={(setIndex, field, value) => updateSet(exIndex, setIndex, field, value)}
-                onSetAdd={() => addSet(exIndex)}
-                onSetDelete={setIndex => deleteSet(exIndex, setIndex)}
-                onDiscomfortChange={rating => updateDiscomfort(exIndex, rating)}
-                onNotesChange={notes => updateNotes(exIndex, notes)}
-                onManage={() => handleManageExercise(exIndex)}
-              />
+              <ScaleDecorator>
+                <ExerciseCard
+                  exerciseData={exData}
+                  exerciseDef={exDef}
+                  exConfig={exData.exConfig}
+                  currentBlock={currentBlock}
+                  weightUnit={weightUnit}
+                  previousData={previousData[exData.exerciseId]}
+                  onSetUpdate={(setIndex, field, value) => updateSet(exIndex, setIndex, field, value)}
+                  onSetAdd={() => addSet(exIndex)}
+                  onSetDelete={setIndex => deleteSet(exIndex, setIndex)}
+                  onDiscomfortChange={rating => updateDiscomfort(exIndex, rating)}
+                  onNotesChange={notes => updateNotes(exIndex, notes)}
+                  onManage={() => handleManageExercise(exIndex)}
+                  drag={drag}
+                  isActive={isActive}
+                />
+              </ScaleDecorator>
             );
-          })}
+          }}
+          ListFooterComponent={
+            <View>
+              <TouchableOpacity
+                onPress={async () => {
+                  const latest = await getCustomExercises();
+                  setCustomExercises(latest);
+                  pickerModeRef.current = 'add';
+                  setPickerMode('add');
+                }}
+                style={styles.addExerciseBtn}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.addExercisePlus}>+</Text>
+                <Text style={styles.addExerciseText}>Add exercise</Text>
+              </TouchableOpacity>
 
-          <TouchableOpacity
-            onPress={async () => {
-              const latest = await getCustomExercises();
-              setCustomExercises(latest);
-              setPickerMode('add');
-            }}
-            style={styles.addExerciseBtn}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.addExercisePlus}>+</Text>
-            <Text style={styles.addExerciseText}>Add exercise</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={handleFinish}
-            disabled={finishing}
-            style={styles.bottomFinishBtn}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.bottomFinishText}>
-              {finishing ? 'Saving...' : 'Finish workout'}
-            </Text>
-          </TouchableOpacity>
-        </ScrollView>
+              <TouchableOpacity
+                onPress={handleFinish}
+                disabled={finishing}
+                style={styles.bottomFinishBtn}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.bottomFinishText}>
+                  {finishing ? 'Saving...' : 'Finish workout'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          }
+        />
       </KeyboardAvoidingView>
 
       <ExercisePicker
         visible={pickerMode !== null}
         exercises={allExercises}
-        onClose={() => setPickerMode(null)}
+        onClose={() => {
+          pickerModeRef.current = null;
+          setPickerMode(null);
+        }}
         onSelect={handlePickerSelect}
         onCreateCustom={() => {
+          createCustomContextRef.current = pickerModeRef.current;
+          pickerModeRef.current = null;
           setPickerMode(null);
-          setShowCreateCustom(true);
+          setTimeout(() => setShowCreateCustom(true), 400);
         }}
         excludeIds={pickerExcludeIds}
       />
