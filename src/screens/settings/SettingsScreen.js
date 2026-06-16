@@ -80,6 +80,23 @@ export default function SettingsScreen({ navigation }) {
           </TouchableOpacity>
         </View>
 
+        {__DEV__ && (
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>Developer</Text>
+            <TouchableOpacity
+              style={styles.row}
+              onPress={() => navigation.navigate('DevPanel')}
+              activeOpacity={0.7}
+            >
+              <View style={styles.rowLeft}>
+                <Text style={styles.rowTitle}>Engine testing panel</Text>
+                <Text style={styles.rowSubtitle}>Inject scenarios, jump weeks (dev only)</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={colors.textTertiary} />
+            </TouchableOpacity>
+          </View>
+        )}
+
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>Appearance</Text>
           <View style={styles.row}>
