@@ -332,6 +332,7 @@ function ExerciseCard({
             : 'Add notes for this exercise...'}
           placeholderTextColor={colors.textTertiary}
           multiline
+          blurOnSubmit
           maxLength={300}
           returnKeyType="done"
         />
