@@ -13,9 +13,8 @@ export default function ReorderExercisesScreen({ navigation, route }) {
   const [items, setItems] = useState(exercises);
 
   function handleDone() {
-    navigation.navigate('ActiveWorkout', {
-      reorderedIds: items.map(e => e.exerciseId),
-    });
+    route.params.onSave(items.map(e => e.exerciseId));
+    navigation.goBack();
   }
 
   return (

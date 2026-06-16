@@ -470,17 +470,6 @@ export default function ActiveWorkoutScreen({ navigation, route }) {
     load();
   }, []);
 
-  // Apply reordering returned from ReorderExercisesScreen
-  useEffect(() => {
-    const reorderedIds = route.params?.reorderedIds;
-    if (!reorderedIds?.length) return;
-    setSessionExercises(prev => {
-      const map = Object.fromEntries(prev.map(e => [e.exerciseId, e]));
-      return reorderedIds.map(id => map[id]).filter(Boolean);
-    });
-    navigation.setParams({ reorderedIds: undefined });
-  }, [route.params?.reorderedIds]);
-
   async function loadPreviousData(ids) {
     const results = {};
     for (const id of ids) {
@@ -569,6 +558,21 @@ export default function ActiveWorkoutScreen({ navigation, route }) {
       exDef?.name || 'Exercise',
       'Manage this exercise',
       [
+        ...(sessionExercises.length > 1 ? [{
+          text: 'Reorder exercises',
+          onPress: () => navigation.navigate('ReorderExercises', {
+            exercises: sessionExercises.map(e => ({
+              exerciseId: e.exerciseId,
+              name: allExercises.find(x => x.id === e.exerciseId)?.name || 'Unknown',
+            })),
+            onSave: (reorderedIds) => {
+              setSessionExercises(prev => {
+                const map = Object.fromEntries(prev.map(e => [e.exerciseId, e]));
+                return reorderedIds.map(id => map[id]).filter(Boolean);
+              });
+            },
+          }),
+        }] : []),
         {
           text: 'Swap exercise',
           onPress: () => {
@@ -825,22 +829,6 @@ export default function ActiveWorkoutScreen({ navigation, route }) {
             <Text style={styles.addExerciseText}>Add exercise</Text>
           </TouchableOpacity>
 
-          {sessionExercises.length > 1 && (
-            <TouchableOpacity
-              onPress={() => navigation.navigate('ReorderExercises', {
-                exercises: sessionExercises.map(e => ({
-                  exerciseId: e.exerciseId,
-                  name: allExercises.find(x => x.id === e.exerciseId)?.name || 'Unknown',
-                })),
-              })}
-              style={styles.reorderBtn}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="swap-vertical-outline" size={16} color={colors.textSecondary} />
-              <Text style={styles.reorderBtnText}>Reorder exercises</Text>
-            </TouchableOpacity>
-          )}
-
           <TouchableOpacity
             onPress={handleFinish}
             disabled={finishing}
@@ -916,10 +904,4 @@ const makeStyles = (colors) => StyleSheet.create({
     height: 52, alignItems: 'center', justifyContent: 'center', marginTop: spacing.xs,
   },
   bottomFinishText: { color: '#fff', fontWeight: '700', fontSize: fontSizes.md },
-  reorderBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
-    paddingVertical: 11, borderWidth: 1, borderColor: colors.border,
-    borderRadius: borderRadius.lg, marginBottom: spacing.sm,
-  },
-  reorderBtnText: { fontSize: fontSizes.sm, fontWeight: '600', color: colors.textSecondary },
 });
