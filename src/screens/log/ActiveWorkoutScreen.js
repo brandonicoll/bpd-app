@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   View, Text, StyleSheet, TextInput,
   TouchableOpacity, SafeAreaView, Alert, KeyboardAvoidingView,
-  Platform, ActivityIndicator, Modal, FlatList,
+  Platform, ActivityIndicator, Modal, FlatList, ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import 'react-native-get-random-values';
@@ -19,7 +19,6 @@ import {
   clearDraftSession,
   getCustomExercises,
 } from '../../services/storage';
-import DraggableFlatList, { ScaleDecorator } from 'react-native-draggable-flatlist';
 import CustomExerciseModal from '../../components/common/CustomExerciseModal';
 import { exercises as exerciseLibrary } from '../../data/exercises';
 import {
@@ -249,7 +248,7 @@ const makePickerStyles = (colors) => StyleSheet.create({
 function ExerciseCard({
   exerciseData, exerciseDef, exConfig, currentBlock, weightUnit,
   previousData, onSetUpdate, onSetAdd, onSetDelete, onDiscomfortChange,
-  onNotesChange, onManage, drag, isActive, isPreCollapsing,
+  onNotesChange, onManage,
 }) {
   const { colors } = useTheme();
   const exStyles = makeExStyles(colors);
@@ -257,23 +256,9 @@ function ExerciseCard({
   const rpeGuidance = getExerciseRPEGuidance(exConfig, currentBlock);
   const prevSets = previousData?.sets || [];
 
-  if (isActive || isPreCollapsing) {
-    return (
-      <View style={exStyles.cardCollapsed}>
-        <TouchableOpacity onLongPress={drag} delayLongPress={150} style={exStyles.dragHandle} hitSlop={{ top: 8, bottom: 8, left: 4, right: 8 }}>
-          <Ionicons name="reorder-three-outline" size={22} color={colors.primary} />
-        </TouchableOpacity>
-        <Text style={exStyles.nameCollapsed}>{exerciseDef.name}</Text>
-      </View>
-    );
-  }
-
   return (
     <View style={exStyles.card}>
       <View style={exStyles.header}>
-        <TouchableOpacity onLongPress={drag} delayLongPress={150} style={exStyles.dragHandle} hitSlop={{ top: 8, bottom: 8, left: 4, right: 8 }}>
-          <Ionicons name="reorder-three-outline" size={22} color={colors.textTertiary} />
-        </TouchableOpacity>
         <View style={exStyles.headerLeft}>
           <Text style={exStyles.name}>{exerciseDef.name}</Text>
           <Text style={exStyles.range}>
@@ -387,20 +372,7 @@ const makeExStyles = (colors) => StyleSheet.create({
     marginBottom: spacing.md,
   },
   header: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: spacing.sm },
-  dragHandle: { paddingRight: spacing.sm, paddingTop: 2 },
   headerLeft: { flex: 1 },
-  cardCollapsed: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: colors.primary,
-    opacity: 0.92,
-  },
-  nameCollapsed: { flex: 1, fontSize: fontSizes.md, fontWeight: '700', color: colors.text },
   name: { fontSize: fontSizes.lg, fontWeight: '700', color: colors.text, marginBottom: 2 },
   range: { fontSize: fontSizes.xs, color: colors.textSecondary },
   manageBtn: { paddingLeft: spacing.sm },
@@ -466,7 +438,6 @@ export default function ActiveWorkoutScreen({ navigation, route }) {
   const createCustomContextRef = useRef(null);
   const [customExercises, setCustomExercises] = useState([]);
   const [showCreateCustom, setShowCreateCustom] = useState(false);
-  const [preCollapseId, setPreCollapseId] = useState(null);
 
   const allExercises = useMemo(
     () => [...exerciseLibrary, ...customExercises],
@@ -498,6 +469,17 @@ export default function ActiveWorkoutScreen({ navigation, route }) {
     }
     load();
   }, []);
+
+  // Apply reordering returned from ReorderExercisesScreen
+  useEffect(() => {
+    const reorderedIds = route.params?.reorderedIds;
+    if (!reorderedIds?.length) return;
+    setSessionExercises(prev => {
+      const map = Object.fromEntries(prev.map(e => [e.exerciseId, e]));
+      return reorderedIds.map(id => map[id]).filter(Boolean);
+    });
+    navigation.setParams({ reorderedIds: undefined });
+  }, [route.params?.reorderedIds]);
 
   async function loadPreviousData(ids) {
     const results = {};
@@ -801,81 +783,75 @@ export default function ActiveWorkoutScreen({ navigation, route }) {
           </TouchableOpacity>
         </View>
 
-        <DraggableFlatList
-          data={sessionExercises}
-          onDragEnd={({ data }) => { setSessionExercises(data); setPreCollapseId(null); }}
-          keyExtractor={(item, i) => `${item.exerciseId}-${i}`}
-          containerStyle={styles.scroll}
+        <ScrollView
+          style={styles.scroll}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
-          renderPlaceholder={({ item }) => {
-            const exDef = allExercises.find(e => e.id === item.exerciseId);
-            return (
-              <View style={styles.dragPlaceholder}>
-                <Text style={styles.dragPlaceholderText} numberOfLines={1}>{exDef?.name}</Text>
-              </View>
-            );
-          }}
-          renderItem={({ item: exData, drag: originalDrag, isActive, getIndex }) => {
-            const exIndex = getIndex() ?? 0;
+        >
+          {sessionExercises.map((exData, exIndex) => {
             const exDef = allExercises.find(e => e.id === exData.exerciseId);
             if (!exDef) return null;
-            const drag = () => {
-              setPreCollapseId(exData.exerciseId);
-              originalDrag();
-            };
             return (
-              <ScaleDecorator>
-                <ExerciseCard
-                  exerciseData={exData}
-                  exerciseDef={exDef}
-                  exConfig={exData.exConfig}
-                  currentBlock={currentBlock}
-                  weightUnit={weightUnit}
-                  previousData={previousData[exData.exerciseId]}
-                  onSetUpdate={(setIndex, field, value) => updateSet(exIndex, setIndex, field, value)}
-                  onSetAdd={() => addSet(exIndex)}
-                  onSetDelete={setIndex => deleteSet(exIndex, setIndex)}
-                  onDiscomfortChange={rating => updateDiscomfort(exIndex, rating)}
-                  onNotesChange={notes => updateNotes(exIndex, notes)}
-                  onManage={() => handleManageExercise(exIndex)}
-                  drag={drag}
-                  isActive={isActive}
-                  isPreCollapsing={preCollapseId === exData.exerciseId}
-                />
-              </ScaleDecorator>
+              <ExerciseCard
+                key={`${exData.exerciseId}-${exIndex}`}
+                exerciseData={exData}
+                exerciseDef={exDef}
+                exConfig={exData.exConfig}
+                currentBlock={currentBlock}
+                weightUnit={weightUnit}
+                previousData={previousData[exData.exerciseId]}
+                onSetUpdate={(setIndex, field, value) => updateSet(exIndex, setIndex, field, value)}
+                onSetAdd={() => addSet(exIndex)}
+                onSetDelete={setIndex => deleteSet(exIndex, setIndex)}
+                onDiscomfortChange={rating => updateDiscomfort(exIndex, rating)}
+                onNotesChange={notes => updateNotes(exIndex, notes)}
+                onManage={() => handleManageExercise(exIndex)}
+              />
             );
-          }}
-          ListFooterComponent={
-            <View>
-              <TouchableOpacity
-                onPress={async () => {
-                  const latest = await getCustomExercises();
-                  setCustomExercises(latest);
-                  pickerModeRef.current = 'add';
-                  setPickerMode('add');
-                }}
-                style={styles.addExerciseBtn}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.addExercisePlus}>+</Text>
-                <Text style={styles.addExerciseText}>Add exercise</Text>
-              </TouchableOpacity>
+          })}
 
-              <TouchableOpacity
-                onPress={handleFinish}
-                disabled={finishing}
-                style={styles.bottomFinishBtn}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.bottomFinishText}>
-                  {finishing ? 'Saving...' : 'Finish workout'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          }
-        />
+          <TouchableOpacity
+            onPress={async () => {
+              const latest = await getCustomExercises();
+              setCustomExercises(latest);
+              pickerModeRef.current = 'add';
+              setPickerMode('add');
+            }}
+            style={styles.addExerciseBtn}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.addExercisePlus}>+</Text>
+            <Text style={styles.addExerciseText}>Add exercise</Text>
+          </TouchableOpacity>
+
+          {sessionExercises.length > 1 && (
+            <TouchableOpacity
+              onPress={() => navigation.navigate('ReorderExercises', {
+                exercises: sessionExercises.map(e => ({
+                  exerciseId: e.exerciseId,
+                  name: allExercises.find(x => x.id === e.exerciseId)?.name || 'Unknown',
+                })),
+              })}
+              style={styles.reorderBtn}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="swap-vertical-outline" size={16} color={colors.textSecondary} />
+              <Text style={styles.reorderBtnText}>Reorder exercises</Text>
+            </TouchableOpacity>
+          )}
+
+          <TouchableOpacity
+            onPress={handleFinish}
+            disabled={finishing}
+            style={styles.bottomFinishBtn}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.bottomFinishText}>
+              {finishing ? 'Saving...' : 'Finish workout'}
+            </Text>
+          </TouchableOpacity>
+        </ScrollView>
       </KeyboardAvoidingView>
 
       <ExercisePicker
@@ -940,13 +916,10 @@ const makeStyles = (colors) => StyleSheet.create({
     height: 52, alignItems: 'center', justifyContent: 'center', marginTop: spacing.xs,
   },
   bottomFinishText: { color: '#fff', fontWeight: '700', fontSize: fontSizes.md },
-  dragPlaceholder: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: colors.primaryLight,
-    borderRadius: borderRadius.lg,
-    borderWidth: 1.5, borderColor: colors.primary, borderStyle: 'dashed',
-    paddingHorizontal: spacing.md, paddingVertical: spacing.md,
-    marginBottom: spacing.md,
+  reorderBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    paddingVertical: 11, borderWidth: 1, borderColor: colors.border,
+    borderRadius: borderRadius.lg, marginBottom: spacing.sm,
   },
-  dragPlaceholderText: { flex: 1, fontSize: fontSizes.md, fontWeight: '700', color: colors.primary, opacity: 0.6 },
+  reorderBtnText: { fontSize: fontSizes.sm, fontWeight: '600', color: colors.textSecondary },
 });

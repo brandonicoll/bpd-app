@@ -4,6 +4,7 @@ import StartWorkoutScreen from '../screens/log/StartWorkoutScreen';
 import ActiveWorkoutScreen from '../screens/log/ActiveWorkoutScreen';
 import SessionSummaryScreen from '../screens/log/SessionSummaryScreen';
 import WorkoutHistoryScreen from '../screens/log/WorkoutHistoryScreen';
+import ReorderExercisesScreen from '../screens/log/ReorderExercisesScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -14,6 +15,11 @@ export default function LogStack() {
       <Stack.Screen name="ActiveWorkout" component={ActiveWorkoutScreen} />
       <Stack.Screen name="SessionSummary" component={SessionSummaryScreen} />
       <Stack.Screen name="WorkoutHistory" component={WorkoutHistoryScreen} />
+      <Stack.Screen
+        name="ReorderExercises"
+        component={ReorderExercisesScreen}
+        options={{ presentation: 'modal' }}
+      />
     </Stack.Navigator>
   );
 }
