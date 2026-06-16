@@ -103,6 +103,13 @@ export async function saveSession(session) {
   return setItem(KEYS.SESSIONS, sessions);
 }
 
+export async function deleteSession(sessionId) {
+  const sessions = await getAllSessions();
+  const filtered = sessions.filter(s => s.id !== sessionId);
+  if (filtered.length === sessions.length) return false;
+  return setItem(KEYS.SESSIONS, filtered);
+}
+
 export async function updateSession(sessionId, updates) {
   const sessions = await getAllSessions();
   const idx = sessions.findIndex(s => s.id === sessionId);
