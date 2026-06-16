@@ -61,3 +61,32 @@ export function getGreeting() {
   if (hour < 17) return 'Good afternoon';
   return 'Good evening';
 }
+
+// "May 2026"
+export function monthYearLabel(isoString) {
+  const d = new Date(isoString);
+  return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+}
+
+// Short weekday, e.g. "Sat"
+export function weekdayShort(isoString) {
+  return new Date(isoString).toLocaleDateString('en-US', { weekday: 'short' });
+}
+
+// Day of month number, e.g. 9
+export function dayOfMonth(isoString) {
+  return new Date(isoString).getDate();
+}
+
+// Groups sessions into [{ key, label, sessions }] sorted newest-month first,
+// newest session first within each month.
+export function groupSessionsByMonth(sessions) {
+  const sorted = [...sessions].sort((a, b) => new Date(b.date) - new Date(a.date));
+  const groups = {};
+  for (const s of sorted) {
+    const key = monthYearLabel(s.date);
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(s);
+  }
+  return Object.entries(groups).map(([label, sessions]) => ({ key: label, label, sessions }));
+}

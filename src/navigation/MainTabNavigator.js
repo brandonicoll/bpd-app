@@ -7,7 +7,7 @@ import HomeStack from './HomeStack';
 import ProgramStack from './ProgramStack';
 import LogStack from './LogStack';
 import InsightsStack from './InsightsStack';
-import SocialStack from './SocialStack';
+import HistoryStack from './HistoryStack';
 
 const Tab = createBottomTabNavigator();
 
@@ -49,9 +49,9 @@ export default function MainTabNavigator() {
         options={{ title: 'Insights', tabBarIcon: ({ color, size }) => <Ionicons name="bar-chart-outline" size={size} color={color} /> }}
       />
       <Tab.Screen
-        name="SocialTab"
-        component={SocialStack}
-        options={{ title: 'Share', tabBarIcon: ({ color, size }) => <Ionicons name="share-social-outline" size={size} color={color} /> }}
+        name="HistoryTab"
+        component={HistoryStack}
+        options={{ title: 'History', tabBarIcon: ({ color, size }) => <Ionicons name="time-outline" size={size} color={color} /> }}
       />
     </Tab.Navigator>
   );
