@@ -1,12 +1,13 @@
 import React, { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  SafeAreaView, ActivityIndicator,
+  SafeAreaView, ActivityIndicator, Alert,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../../theme/ThemeContext';
 import { spacing, fontSizes, borderRadius } from '../../theme';
-import { getAllSessions, getCustomExercises } from '../../services/storage';
+import { getAllSessions, getCustomExercises, deleteSession } from '../../services/storage';
 import { exercises as builtInExercises } from '../../data/exercises';
 import { groupSessionsByMonth, weekdayShort, dayOfMonth } from '../../utils/dateHelpers';
 import { getDurationMinutes, formatDuration } from '../../utils/workoutHelpers';
@@ -29,6 +30,25 @@ export default function HistoryScreen({ navigation }) {
   }, []);
 
   useFocusEffect(useCallback(() => { setLoading(true); load(); }, [load]));
+
+  function handleDelete(session) {
+    const dayName = session.splitDayDisplayName || session.splitDayLabel;
+    Alert.alert(
+      'Delete session?',
+      `Remove ${dayName} from your history? This can't be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            await deleteSession(session.id);
+            setSessions(prev => prev.filter(s => s.id !== session.id));
+          },
+        },
+      ]
+    );
+  }
 
   if (loading) {
     return (
@@ -95,6 +115,14 @@ export default function HistoryScreen({ navigation }) {
                           </Text>
                         ))}
                       </View>
+
+                      <TouchableOpacity
+                        onPress={() => handleDelete(session)}
+                        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                        style={styles.deleteBtn}
+                      >
+                        <Ionicons name="trash-outline" size={18} color={colors.textTertiary} />
+                      </TouchableOpacity>
                     </View>
                   </TouchableOpacity>
                 );
@@ -131,7 +159,8 @@ const makeStyles = (colors) => StyleSheet.create({
     padding: spacing.md, marginBottom: spacing.sm,
     borderWidth: 1, borderColor: colors.border,
   },
-  cardHeader: { flexDirection: 'row', gap: spacing.md },
+  cardHeader: { flexDirection: 'row', gap: spacing.md, alignItems: 'flex-start' },
+  deleteBtn: { paddingTop: 2 },
   dateBadge: {
     width: 52, height: 52, borderRadius: borderRadius.md,
     backgroundColor: colors.gray100, alignItems: 'center', justifyContent: 'center', flexShrink: 0,
