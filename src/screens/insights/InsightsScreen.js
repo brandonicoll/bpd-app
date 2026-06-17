@@ -64,7 +64,7 @@ function ExerciseTrendRow({ trend, onPress, weightUnit }) {
       <View style={styles.trendInfo}>
         <Text style={styles.trendName} numberOfLines={1}>{trend.exerciseName}</Text>
         <Text style={styles.trendMeta}>
-          {trend.displayName || trend.dayLabel} · {trend.sessionsLogged} session{trend.sessionsLogged !== 1 ? 's' : ''}
+          {trend.displayName || trend.dayLabel || 'Custom'} · {trend.sessionsLogged} session{trend.sessionsLogged !== 1 ? 's' : ''}
           {trend.sessionsLogged >= 2 && trend.lastE1RM > 0 ? ` · ${trend.lastE1RM}${weightUnit} est. 1RM` : ''}
         </Text>
       </View>

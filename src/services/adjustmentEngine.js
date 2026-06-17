@@ -78,13 +78,15 @@ function getAvgEnergyFromSessions(allSessions, lastN = 8) {
 }
 
 // ─── Joint action metrics ─────────────────────────────────────────────────────
-export function calculateJointActionMetrics(program, exerciseTrends) {
+export function calculateJointActionMetrics(program, exerciseTrends, allSessions = []) {
   const map = {};
+  const seenInProgram = new Set();
 
   for (const splitDay of program.splitDays) {
     for (const exConfig of splitDay.exercises) {
       const exDef = findExercise(exConfig.exerciseId);
       if (!exDef) continue;
+      seenInProgram.add(exConfig.exerciseId);
 
       for (const jointAction of exDef.jointActions) {
         if (!map[jointAction]) {
@@ -105,6 +107,45 @@ export function calculateJointActionMetrics(program, exerciseTrends) {
         if (!entry.dayLabels.includes(splitDay.dayLabel)) {
           entry.dayLabels.push(splitDay.dayLabel);
         }
+      }
+    }
+  }
+
+  // Also account for exercises logged in sessions but not currently in the program
+  // (custom exercises added ad-hoc). Estimate weekly sets from recent session data.
+  for (const trend of exerciseTrends) {
+    if (seenInProgram.has(trend.exerciseId) || trend.sessionsLogged === 0) continue;
+    const exDef = findExercise(trend.exerciseId);
+    if (!exDef?.jointActions?.length) continue;
+
+    const recentSessions = allSessions
+      .filter(s => s.exercises?.some(e => e.exerciseId === trend.exerciseId))
+      .sort((a, b) => new Date(b.date) - new Date(a.date))
+      .slice(0, 4);
+    const avgSets = recentSessions.length
+      ? recentSessions.reduce((sum, s) => {
+          const ex = s.exercises.find(e => e.exerciseId === trend.exerciseId);
+          return sum + (ex?.sets?.length || 0);
+        }, 0) / recentSessions.length
+      : 0;
+
+    for (const jointAction of exDef.jointActions) {
+      if (!map[jointAction]) {
+        map[jointAction] = {
+          jointAction,
+          label: JOINT_ACTION_LABELS[jointAction] || jointAction,
+          exercises: [],
+          totalWeeklySets: 0,
+          dayLabels: [],
+        };
+      }
+      const entry = map[jointAction];
+      if (!entry.exercises.includes(trend.exerciseId)) {
+        entry.exercises.push(trend.exerciseId);
+        entry.totalWeeklySets += Math.round(avgSets);
+      }
+      if (trend.dayLabel && !entry.dayLabels.includes(trend.dayLabel)) {
+        entry.dayLabels.push(trend.dayLabel);
       }
     }
   }
@@ -616,72 +657,98 @@ function checkExerciseOrderOptimization(program, exerciseTrends) {
 }
 
 // ─── Exercise trends ──────────────────────────────────────────────────────────
+function buildTrendEntry(exerciseId, exDef, dayLabel, displayName, allSessions) {
+  const exerciseSessions = allSessions
+    .filter(s => s.exercises?.some(e => e.exerciseId === exerciseId))
+    .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+  if (!exerciseSessions.length) {
+    return {
+      exerciseId, exerciseName: exDef.name, dayLabel, displayName,
+      sessionsLogged: 0, firstE1RM: 0, lastE1RM: 0, deltaPercent: 0,
+      trend: 'no_data', avgDiscomfort: 0, discomfortFlag: false, lastDate: null,
+    };
+  }
+
+  const getE1RM = (session) => {
+    const exData = session.exercises.find(e => e.exerciseId === exerciseId);
+    if (!exData?.sets?.length) return 0;
+    return Math.max(...exData.sets.map(s => {
+      const w = parseFloat(s.weight) || 0;
+      const r = parseInt(s.reps)     || 0;
+      return w && r ? Math.round(w * (1 + r / 30)) : 0;
+    }));
+  };
+
+  const firstE1RM    = getE1RM(exerciseSessions[0]);
+  const lastE1RM     = getE1RM(exerciseSessions[exerciseSessions.length - 1]);
+  const deltaPercent = firstE1RM > 0 ? ((lastE1RM - firstE1RM) / firstE1RM) * 100 : 0;
+
+  const discomfortRatings = exerciseSessions.slice(-3)
+    .map(s => s.exercises.find(e => e.exerciseId === exerciseId)?.discomfortRating)
+    .filter(Boolean);
+  const avgDiscomfort = discomfortRatings.length
+    ? discomfortRatings.reduce((a, b) => a + b, 0) / discomfortRatings.length
+    : 0;
+
+  let trend;
+  if (exerciseSessions.length < 2) trend = 'no_data';
+  else if (deltaPercent >= 5)      trend = 'progressing';
+  else if (deltaPercent >= -2)     trend = 'plateau';
+  else                             trend = 'declining';
+
+  return {
+    exerciseId,
+    exerciseName: exDef.name,
+    dayLabel,
+    displayName,
+    sessionsLogged: exerciseSessions.length,
+    firstE1RM, lastE1RM,
+    deltaPercent: Math.round(deltaPercent * 10) / 10,
+    trend,
+    avgDiscomfort: Math.round(avgDiscomfort * 10) / 10,
+    discomfortFlag: avgDiscomfort >= 7,
+    lastDate: exerciseSessions[exerciseSessions.length - 1]?.date || null,
+  };
+}
+
 async function calculateExerciseTrends(program, allSessions) {
   const trends = [];
   const seen   = new Set();
 
+  // First pass: exercises formally in the program (we have their dayLabel)
   for (const splitDay of program.splitDays) {
     for (const exConfig of splitDay.exercises) {
       const exDef = findExercise(exConfig.exerciseId);
       if (!exDef) continue;
-
       const exerciseId = exConfig.exerciseId;
       if (seen.has(exerciseId)) continue;
       seen.add(exerciseId);
-      const exerciseSessions = allSessions
+      trends.push(buildTrendEntry(
+        exerciseId, exDef, splitDay.dayLabel, splitDay.displayName || null, allSessions
+      ));
+    }
+  }
+
+  // Second pass: exercises in sessions but not in the current program
+  // (custom exercises added ad-hoc, or exercises swapped out since they were logged)
+  for (const session of allSessions) {
+    for (const exData of (session.exercises || [])) {
+      const exerciseId = exData.exerciseId;
+      if (seen.has(exerciseId)) continue;
+      const exDef = findExercise(exerciseId);
+      if (!exDef) continue;
+      seen.add(exerciseId);
+      // Use the most recent session's day as context
+      const recentSession = allSessions
         .filter(s => s.exercises?.some(e => e.exerciseId === exerciseId))
-        .sort((a, b) => new Date(a.date) - new Date(b.date));
-
-      if (!exerciseSessions.length) {
-        trends.push({
-          exerciseId, exerciseName: exDef.name, dayLabel: splitDay.dayLabel,
-          displayName: splitDay.displayName || null,
-          sessionsLogged: 0, firstE1RM: 0, lastE1RM: 0, deltaPercent: 0,
-          trend: 'no_data', avgDiscomfort: 0, discomfortFlag: false, lastDate: null,
-        });
-        continue;
-      }
-
-      const getE1RM = (session) => {
-        const exData = session.exercises.find(e => e.exerciseId === exerciseId);
-        if (!exData?.sets?.length) return 0;
-        return Math.max(...exData.sets.map(s => {
-          const w = parseFloat(s.weight) || 0;
-          const r = parseInt(s.reps)     || 0;
-          return w && r ? Math.round(w * (1 + r / 30)) : 0;
-        }));
-      };
-
-      const firstE1RM    = getE1RM(exerciseSessions[0]);
-      const lastE1RM     = getE1RM(exerciseSessions[exerciseSessions.length - 1]);
-      const deltaPercent = firstE1RM > 0 ? ((lastE1RM - firstE1RM) / firstE1RM) * 100 : 0;
-
-      const discomfortRatings = exerciseSessions.slice(-3)
-        .map(s => s.exercises.find(e => e.exerciseId === exerciseId)?.discomfortRating)
-        .filter(Boolean);
-      const avgDiscomfort = discomfortRatings.length
-        ? discomfortRatings.reduce((a, b) => a + b, 0) / discomfortRatings.length
-        : 0;
-
-      let trend;
-      if (exerciseSessions.length < 2) trend = 'no_data';
-      else if (deltaPercent >= 5)      trend = 'progressing';
-      else if (deltaPercent >= -2)     trend = 'plateau';
-      else                             trend = 'declining';
-
-      trends.push({
-        exerciseId,
-        exerciseName: exDef.name,
-        dayLabel: splitDay.dayLabel,
-        displayName: splitDay.displayName || null,
-        sessionsLogged: exerciseSessions.length,
-        firstE1RM, lastE1RM,
-        deltaPercent: Math.round(deltaPercent * 10) / 10,
-        trend,
-        avgDiscomfort: Math.round(avgDiscomfort * 10) / 10,
-        discomfortFlag: avgDiscomfort >= 7,
-        lastDate: exerciseSessions[exerciseSessions.length - 1]?.date || null,
-      });
+        .sort((a, b) => new Date(b.date) - new Date(a.date))[0];
+      trends.push(buildTrendEntry(
+        exerciseId, exDef,
+        recentSession?.splitDayLabel || null,
+        recentSession?.splitDayDisplayName || null,
+        allSessions
+      ));
     }
   }
 
@@ -709,7 +776,7 @@ export async function runAdjustmentEngine() {
   recommendations.push(...checkDiscomfortRules(program, allSessions));
 
   const exerciseTrends     = await calculateExerciseTrends(program, allSessions);
-  const jointActionMetrics = calculateJointActionMetrics(program, exerciseTrends);
+  const jointActionMetrics = calculateJointActionMetrics(program, exerciseTrends, allSessions);
 
   if (isOptimizationBlock) {
     const fatigueRec = checkFatigueFlag(allSessions);
