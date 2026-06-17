@@ -1,19 +1,17 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, SafeAreaView, ActivityIndicator,
-  TouchableOpacity, Alert,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/ThemeContext';
 import { spacing, fontSizes, borderRadius } from '../../theme';
-import { getAllSessions, getCustomExercises, deleteSession } from '../../services/storage';
+import { getAllSessions, getCustomExercises } from '../../services/storage';
 import { exercises as builtInExercises } from '../../data/exercises';
 import {
   calculateTotalVolume, getBestE1RM, getDurationMinutes, formatDuration, discomfortLabel,
 } from '../../utils/workoutHelpers';
 import { weekdayShort, dayOfMonth, monthYearLabel } from '../../utils/dateHelpers';
 
-export default function HistoryDetailScreen({ route, navigation }) {
+export default function HistoryDetailScreen({ route }) {
   const { colors } = useTheme();
   const styles = makeStyles(colors);
   const { sessionId } = route.params;
@@ -35,37 +33,6 @@ export default function HistoryDetailScreen({ route, navigation }) {
     load();
   }, [sessionId]);
 
-  const handleDelete = useCallback(() => {
-    Alert.alert(
-      'Delete session?',
-      'This workout will be permanently removed from your history.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            await deleteSession(sessionId);
-            navigation.goBack();
-          },
-        },
-      ]
-    );
-  }, [sessionId, navigation]);
-
-  useEffect(() => {
-    navigation.setOptions({
-      headerRight: () => (
-        <TouchableOpacity
-          onPress={handleDelete}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          style={{ alignItems: 'center', justifyContent: 'center' }}
-        >
-          <Ionicons name="trash-outline" size={20} color={colors.danger} />
-        </TouchableOpacity>
-      ),
-    });
-  }, [navigation, handleDelete, colors.danger]);
 
   if (loading || !session) {
     return (
