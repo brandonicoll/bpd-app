@@ -56,7 +56,11 @@ export default function HistoryDetailScreen({ route, navigation }) {
   useEffect(() => {
     navigation.setOptions({
       headerRight: () => (
-        <TouchableOpacity onPress={handleDelete} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+        <TouchableOpacity
+          onPress={handleDelete}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          style={{ alignItems: 'center', justifyContent: 'center' }}
+        >
           <Ionicons name="trash-outline" size={20} color={colors.danger} />
         </TouchableOpacity>
       ),
