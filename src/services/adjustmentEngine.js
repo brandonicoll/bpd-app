@@ -345,11 +345,28 @@ function checkJointActionVolume(program, allSessions, jointActionMetrics) {
     const recovery = detectInterSessionRecovery(jointAction, program, allSessions);
     if (!recovery?.hasRecoveryIssue) continue;
 
+    const programExercises = program.splitDays.flatMap(d => d.exercises);
     const exercisesToConsider = metrics.exercises
       .map(id => {
         const exDef   = findExercise(id);
-        const exConfig = program.splitDays.flatMap(d => d.exercises).find(e => e.exerciseId === id);
-        return { id, exDef, sets: exConfig?.sets || 0 };
+        const exConfig = programExercises.find(e => e.exerciseId === id);
+        let sets = exConfig?.sets || 0;
+        if (!sets) {
+          // Exercise not in current program — estimate from recent sessions
+          const recent = allSessions
+            .filter(s => s.exercises?.some(e => e.exerciseId === id))
+            .sort((a, b) => new Date(b.date) - new Date(a.date))
+            .slice(0, 4);
+          if (recent.length) {
+            sets = Math.round(
+              recent.reduce((sum, s) => {
+                const ex = s.exercises.find(e => e.exerciseId === id);
+                return sum + (ex?.sets?.length || 0);
+              }, 0) / recent.length
+            );
+          }
+        }
+        return { id, exDef, sets };
       })
       .filter(e => e.exDef && e.exDef.coordinationDemand !== 'high')
       .sort((a, b) => b.sets - a.sets);
