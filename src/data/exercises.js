@@ -40,7 +40,7 @@ export const exercises = [
   // ── CHEST / PUSH ──────────────────────────────────────────────────────────
   {
     id: 'incline_smith_press',
-    name: 'Incline Smith press',
+    name: 'Incline Smith Press',
     jointActions: [JOINT_ACTIONS.HORIZONTAL_SHOULDER_ADDUCTION],
     muscles: [MUSCLE_GROUPS.CHEST, MUSCLE_GROUPS.SHOULDERS, MUSCLE_GROUPS.TRICEPS],
     defaultRepRange: [5, 7],
@@ -52,7 +52,7 @@ export const exercises = [
   },
   {
     id: 'flat_machine_press',
-    name: 'Flat machine press',
+    name: 'Flat Machine Press',
     jointActions: [JOINT_ACTIONS.HORIZONTAL_SHOULDER_ADDUCTION],
     muscles: [MUSCLE_GROUPS.CHEST, MUSCLE_GROUPS.TRICEPS],
     defaultRepRange: [7, 10],
@@ -64,7 +64,7 @@ export const exercises = [
   },
   {
     id: 'machine_fly',
-    name: 'Machine fly',
+    name: 'Machine Fly',
     jointActions: [JOINT_ACTIONS.HORIZONTAL_SHOULDER_ADDUCTION],
     muscles: [MUSCLE_GROUPS.CHEST],
     defaultRepRange: [6, 10],
@@ -76,7 +76,7 @@ export const exercises = [
   },
   {
     id: 'cable_fly',
-    name: 'Cable fly',
+    name: 'Cable Fly',
     jointActions: [JOINT_ACTIONS.HORIZONTAL_SHOULDER_ADDUCTION],
     muscles: [MUSCLE_GROUPS.CHEST],
     defaultRepRange: [10, 15],
@@ -88,7 +88,7 @@ export const exercises = [
   },
   {
     id: 'dip_machine',
-    name: 'Dip machine',
+    name: 'Dip Machine',
     jointActions: [JOINT_ACTIONS.HORIZONTAL_SHOULDER_ADDUCTION, JOINT_ACTIONS.ELBOW_EXTENSION],
     muscles: [MUSCLE_GROUPS.CHEST, MUSCLE_GROUPS.TRICEPS],
     defaultRepRange: [7, 11],
@@ -114,7 +114,7 @@ export const exercises = [
   // ── BACK / PULL ───────────────────────────────────────────────────────────
   {
     id: 'lat_pulldown',
-    name: 'Lat pulldown',
+    name: 'Lat Pulldown',
     jointActions: [JOINT_ACTIONS.SHOULDER_ADDUCTION],
     muscles: [MUSCLE_GROUPS.LATS, MUSCLE_GROUPS.BICEPS],
     defaultRepRange: [7, 10],
@@ -126,7 +126,7 @@ export const exercises = [
   },
   {
     id: 'pull_up',
-    name: 'Pull-ups',
+    name: 'Pull-Ups',
     jointActions: [JOINT_ACTIONS.SHOULDER_ADDUCTION],
     muscles: [MUSCLE_GROUPS.LATS, MUSCLE_GROUPS.BICEPS],
     defaultRepRange: [5, 10],
@@ -138,7 +138,7 @@ export const exercises = [
   },
   {
     id: 'chest_supported_row_wide',
-    name: 'Wide overhand chest supported row',
+    name: 'Wide Overhand Chest Supported Row',
     jointActions: [JOINT_ACTIONS.HORIZONTAL_HUMERAL_ABDUCTION, JOINT_ACTIONS.SCAPULAR_RETRACTION],
     muscles: [MUSCLE_GROUPS.BACK, MUSCLE_GROUPS.REAR_DELTS, MUSCLE_GROUPS.TRAPS],
     defaultRepRange: [7, 10],
@@ -150,7 +150,7 @@ export const exercises = [
   },
   {
     id: 'wide_neutral_grip_row',
-    name: 'Wide neutral grip row',
+    name: 'Wide Neutral Grip Row',
     jointActions: [JOINT_ACTIONS.HORIZONTAL_HUMERAL_ABDUCTION, JOINT_ACTIONS.SCAPULAR_RETRACTION],
     muscles: [MUSCLE_GROUPS.BACK, MUSCLE_GROUPS.LATS],
     defaultRepRange: [7, 9],
@@ -162,7 +162,7 @@ export const exercises = [
   },
   {
     id: 'single_arm_low_row',
-    name: 'Single arm low row',
+    name: 'Single Arm Low Row',
     jointActions: [JOINT_ACTIONS.HORIZONTAL_HUMERAL_ABDUCTION, JOINT_ACTIONS.SCAPULAR_RETRACTION],
     muscles: [MUSCLE_GROUPS.BACK, MUSCLE_GROUPS.LATS, MUSCLE_GROUPS.BICEPS],
     defaultRepRange: [8, 12],
@@ -174,7 +174,7 @@ export const exercises = [
   },
   {
     id: 'single_arm_high_low_row',
-    name: 'Single arm high-low row',
+    name: 'Single Arm High-Low Row',
     jointActions: [JOINT_ACTIONS.HORIZONTAL_HUMERAL_ABDUCTION, JOINT_ACTIONS.SHOULDER_ADDUCTION],
     muscles: [MUSCLE_GROUPS.BACK, MUSCLE_GROUPS.LATS],
     defaultRepRange: [8, 12],
@@ -186,7 +186,7 @@ export const exercises = [
   },
   {
     id: 'seated_close_grip_row',
-    name: 'Seated close grip row',
+    name: 'Seated Close Grip Row',
     jointActions: [JOINT_ACTIONS.HORIZONTAL_HUMERAL_ABDUCTION, JOINT_ACTIONS.SCAPULAR_RETRACTION],
     muscles: [MUSCLE_GROUPS.BACK, MUSCLE_GROUPS.LATS, MUSCLE_GROUPS.BICEPS],
     defaultRepRange: [7, 11],
@@ -198,7 +198,7 @@ export const exercises = [
   },
   {
     id: 'db_row',
-    name: 'Dumbbell row',
+    name: 'Dumbbell Row',
     jointActions: [JOINT_ACTIONS.HORIZONTAL_HUMERAL_ABDUCTION, JOINT_ACTIONS.SCAPULAR_RETRACTION],
     muscles: [MUSCLE_GROUPS.BACK, MUSCLE_GROUPS.LATS, MUSCLE_GROUPS.BICEPS],
     defaultRepRange: [8, 12],
@@ -212,7 +212,7 @@ export const exercises = [
   // ── SHOULDERS ─────────────────────────────────────────────────────────────
   {
     id: 'machine_shoulder_press',
-    name: 'Machine shoulder press',
+    name: 'Machine Shoulder Press',
     jointActions: [JOINT_ACTIONS.SHOULDER_ABDUCTION],
     muscles: [MUSCLE_GROUPS.SHOULDERS, MUSCLE_GROUPS.TRICEPS],
     defaultRepRange: [8, 12],
@@ -224,7 +224,7 @@ export const exercises = [
   },
   {
     id: 'cable_lateral_raise',
-    name: 'Cable lateral raise',
+    name: 'Cable Lateral Raise',
     jointActions: [JOINT_ACTIONS.SHOULDER_ABDUCTION],
     muscles: [MUSCLE_GROUPS.SHOULDERS],
     defaultRepRange: [8, 12],
@@ -236,7 +236,7 @@ export const exercises = [
   },
   {
     id: 'overhead_press',
-    name: 'Overhead press',
+    name: 'Overhead Press',
     jointActions: [JOINT_ACTIONS.SHOULDER_ABDUCTION],
     muscles: [MUSCLE_GROUPS.SHOULDERS, MUSCLE_GROUPS.TRICEPS],
     defaultRepRange: [6, 10],
@@ -250,7 +250,7 @@ export const exercises = [
   // ── BICEPS ────────────────────────────────────────────────────────────────
   {
     id: 'preacher_curl_machine',
-    name: 'Preacher curl machine',
+    name: 'Preacher Curl Machine',
     jointActions: [JOINT_ACTIONS.ELBOW_FLEXION_SUPINATION],
     muscles: [MUSCLE_GROUPS.BICEPS],
     defaultRepRange: [8, 12],
@@ -262,7 +262,7 @@ export const exercises = [
   },
   {
     id: 'incline_bicep_curl',
-    name: 'Incline bicep curl',
+    name: 'Incline Bicep Curl',
     jointActions: [JOINT_ACTIONS.ELBOW_FLEXION_SUPINATION],
     muscles: [MUSCLE_GROUPS.BICEPS],
     defaultRepRange: [8, 12],
@@ -274,7 +274,7 @@ export const exercises = [
   },
   {
     id: 'hammer_curl',
-    name: 'Hammer curl',
+    name: 'Hammer Curl',
     jointActions: [JOINT_ACTIONS.ELBOW_FLEXION_SUPINATION],
     muscles: [MUSCLE_GROUPS.BICEPS],
     defaultRepRange: [7, 11],
@@ -286,7 +286,7 @@ export const exercises = [
   },
   {
     id: 'bayesian_cable_curl',
-    name: 'Bayesian cable curl',
+    name: 'Bayesian Cable Curl',
     jointActions: [JOINT_ACTIONS.ELBOW_FLEXION_SUPINATION],
     muscles: [MUSCLE_GROUPS.BICEPS],
     defaultRepRange: [8, 12],
@@ -300,7 +300,7 @@ export const exercises = [
   // ── TRICEPS ───────────────────────────────────────────────────────────────
   {
     id: 'cable_tricep_extension',
-    name: 'Cable tricep extension',
+    name: 'Cable Tricep Extension',
     jointActions: [JOINT_ACTIONS.ELBOW_EXTENSION],
     muscles: [MUSCLE_GROUPS.TRICEPS],
     defaultRepRange: [8, 12],
@@ -312,7 +312,7 @@ export const exercises = [
   },
   {
     id: 'skull_crusher',
-    name: 'Skull crusher',
+    name: 'Skull Crusher',
     jointActions: [JOINT_ACTIONS.ELBOW_EXTENSION],
     muscles: [MUSCLE_GROUPS.TRICEPS],
     defaultRepRange: [7, 11],
@@ -324,7 +324,7 @@ export const exercises = [
   },
   {
     id: 'smith_jm_press',
-    name: 'Smith JM press',
+    name: 'Smith JM Press',
     jointActions: [JOINT_ACTIONS.ELBOW_EXTENSION],
     muscles: [MUSCLE_GROUPS.TRICEPS],
     defaultRepRange: [7, 11],
@@ -338,7 +338,7 @@ export const exercises = [
   // ── QUADS / LEGS ──────────────────────────────────────────────────────────
   {
     id: 'hack_squat',
-    name: 'Hack squat',
+    name: 'Hack Squat',
     jointActions: [JOINT_ACTIONS.KNEE_EXTENSION_NONFIXED_HIP],
     muscles: [MUSCLE_GROUPS.QUADS, MUSCLE_GROUPS.GLUTES],
     defaultRepRange: [5, 7],
@@ -362,7 +362,7 @@ export const exercises = [
   },
   {
     id: 'leg_extension',
-    name: 'Leg extensions',
+    name: 'Leg Extensions',
     jointActions: [JOINT_ACTIONS.KNEE_EXTENSION_FIXED_HIP],
     muscles: [MUSCLE_GROUPS.QUADS],
     defaultRepRange: [6, 9],
@@ -388,7 +388,7 @@ export const exercises = [
   },
   {
     id: 'back_extension_45',
-    name: '45s (back extension)',
+    name: '45s (Back Extension)',
     jointActions: [JOINT_ACTIONS.HIP_EXTENSION_STRAIGHT_KNEE],
     muscles: [MUSCLE_GROUPS.HAMSTRINGS, MUSCLE_GROUPS.GLUTES, MUSCLE_GROUPS.BACK],
     defaultRepRange: [7, 10],
@@ -400,7 +400,7 @@ export const exercises = [
   },
   {
     id: 'seated_hamstring_curl',
-    name: 'Seated hamstring curl',
+    name: 'Seated Hamstring Curl',
     jointActions: [JOINT_ACTIONS.KNEE_FLEXION],
     muscles: [MUSCLE_GROUPS.HAMSTRINGS],
     defaultRepRange: [7, 11],
@@ -412,7 +412,7 @@ export const exercises = [
   },
   {
     id: 'lying_hamstring_curl',
-    name: 'Lying hamstring curl',
+    name: 'Lying Hamstring Curl',
     jointActions: [JOINT_ACTIONS.KNEE_FLEXION],
     muscles: [MUSCLE_GROUPS.HAMSTRINGS],
     defaultRepRange: [7, 11],
@@ -426,7 +426,7 @@ export const exercises = [
   // ── GLUTES ────────────────────────────────────────────────────────────────
   {
     id: 'hip_thrust',
-    name: 'Hip thrust',
+    name: 'Hip Thrust',
     jointActions: [JOINT_ACTIONS.HIP_EXTENSION_BENT_KNEE],
     muscles: [MUSCLE_GROUPS.GLUTES, MUSCLE_GROUPS.HAMSTRINGS],
     defaultRepRange: [6, 9],
@@ -438,7 +438,7 @@ export const exercises = [
   },
   {
     id: 'cable_kickback',
-    name: 'Cable kickback',
+    name: 'Cable Kickback',
     jointActions: [JOINT_ACTIONS.HIP_EXTENSION_BENT_KNEE],
     muscles: [MUSCLE_GROUPS.GLUTES],
     defaultRepRange: [8, 12],
@@ -452,7 +452,7 @@ export const exercises = [
   // ── HIP ADDUCTORS / ABDUCTORS ─────────────────────────────────────────────
   {
     id: 'adduction_machine',
-    name: 'Adductor machine',
+    name: 'Adductor Machine',
     jointActions: [JOINT_ACTIONS.HIP_ADDUCTION],
     muscles: [MUSCLE_GROUPS.HIP_ADDUCTORS],
     defaultRepRange: [7, 11],
@@ -464,7 +464,7 @@ export const exercises = [
   },
   {
     id: 'abductor_machine',
-    name: 'Abductor machine',
+    name: 'Abductor Machine',
     jointActions: [JOINT_ACTIONS.HIP_ABDUCTION],
     muscles: [MUSCLE_GROUPS.HIP_ABDUCTORS, MUSCLE_GROUPS.GLUTES],
     defaultRepRange: [7, 11],
@@ -478,7 +478,7 @@ export const exercises = [
   // ── CALVES ────────────────────────────────────────────────────────────────
   {
     id: 'straight_leg_calf_raise',
-    name: 'Straight leg calf raise',
+    name: 'Straight Leg Calf Raise',
     jointActions: [JOINT_ACTIONS.PLANTAR_FLEXION],
     muscles: [MUSCLE_GROUPS.CALVES],
     defaultRepRange: [8, 12],
@@ -490,7 +490,7 @@ export const exercises = [
   },
   {
     id: 'leg_press_calf_raise',
-    name: 'Leg press calf raise',
+    name: 'Leg Press Calf Raise',
     jointActions: [JOINT_ACTIONS.PLANTAR_FLEXION],
     muscles: [MUSCLE_GROUPS.CALVES],
     defaultRepRange: [8, 12],
@@ -504,7 +504,7 @@ export const exercises = [
   // ── CORE ──────────────────────────────────────────────────────────────────
   {
     id: 'cable_crunch',
-    name: 'Cable crunch',
+    name: 'Cable Crunch',
     jointActions: [JOINT_ACTIONS.TRUNK_FLEXION],
     muscles: [MUSCLE_GROUPS.CORE],
     defaultRepRange: [7, 11],
@@ -516,7 +516,7 @@ export const exercises = [
   },
   {
     id: 'crunch_machine',
-    name: 'Crunch machine',
+    name: 'Crunch Machine',
     jointActions: [JOINT_ACTIONS.TRUNK_FLEXION],
     muscles: [MUSCLE_GROUPS.CORE],
     defaultRepRange: [7, 11],

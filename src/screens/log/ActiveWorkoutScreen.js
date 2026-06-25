@@ -430,6 +430,8 @@ export default function ActiveWorkoutScreen({ navigation, route }) {
 
   const startTime = useRef(draftData?.startTime || new Date().toISOString());
   const draftTimerRef = useRef(null);
+  const [restStartedAt, setRestStartedAt] = useState(Date.now());
+  const [restElapsed, setRestElapsed] = useState(0);
 
   const [weightUnit, setWeightUnitState] = useState(draftData?.weightUnit || 'lbs');
   const [previousData, setPreviousData] = useState({});
@@ -470,6 +472,19 @@ export default function ActiveWorkoutScreen({ navigation, route }) {
     }
     load();
   }, []);
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      setRestElapsed(Math.floor((Date.now() - restStartedAt) / 1000));
+    }, 1000);
+    return () => clearInterval(id);
+  }, [restStartedAt]);
+
+  function formatRestTime(seconds) {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  }
 
   async function loadPreviousData(ids) {
     const results = {};
@@ -788,6 +803,16 @@ export default function ActiveWorkoutScreen({ navigation, route }) {
           </TouchableOpacity>
         </View>
 
+        <TouchableOpacity
+          style={styles.restTimer}
+          onPress={() => { setRestStartedAt(Date.now()); setRestElapsed(0); }}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.restTimerLabel}>REST</Text>
+          <Text style={styles.restTimerValue}>{formatRestTime(restElapsed)}</Text>
+          <Ionicons name="refresh" size={14} color={colors.textTertiary} style={{ marginLeft: 6 }} />
+        </TouchableOpacity>
+
         <ScrollView
           style={styles.scroll}
           contentContainerStyle={styles.scrollContent}
@@ -891,6 +916,16 @@ const makeStyles = (colors) => StyleSheet.create({
     paddingHorizontal: spacing.md, paddingVertical: 8, minWidth: 64, alignItems: 'center',
   },
   finishBtnText: { color: '#fff', fontWeight: '700', fontSize: fontSizes.sm },
+  restTimer: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    paddingVertical: 9, paddingHorizontal: spacing.lg,
+    backgroundColor: colors.surface, borderBottomWidth: 0.5, borderBottomColor: colors.border,
+  },
+  restTimerLabel: {
+    fontSize: 10, fontWeight: '700', color: colors.textTertiary,
+    letterSpacing: 1.2, textTransform: 'uppercase', marginRight: 8,
+  },
+  restTimerValue: { fontSize: fontSizes.md, fontWeight: '700', color: colors.text, fontVariant: ['tabular-nums'] },
   scroll: { flex: 1 },
   scrollContent: { padding: spacing.lg, paddingBottom: spacing.xxl },
   addExerciseBtn: {

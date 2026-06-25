@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, Modal, TouchableOpacity,
   TextInput, ScrollView, ActivityIndicator, Alert, SafeAreaView,
@@ -12,7 +12,7 @@ import { JOINT_ACTION_LABELS, JOINT_ACTION_KEYS } from '../../data/jointActionLa
 
 const RPE_OPTIONS = [6, 7, 8, 9, 10];
 
-export default function CustomExerciseModal({ visible, onClose, onSaved }) {
+export default function CustomExerciseModal({ visible, onClose, onSaved, editExercise = null }) {
   const { colors } = useTheme();
   const styles = makeStyles(colors);
 
@@ -23,6 +23,20 @@ export default function CustomExerciseModal({ visible, onClose, onSaved }) {
   const [rpe, setRpe] = useState(8);
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (visible && editExercise) {
+      setName(editExercise.name || '');
+      setSelectedActions(editExercise.jointActions || []);
+      setRepMin(String(editExercise.defaultRepRange?.[0] ?? 8));
+      setRepMax(String(editExercise.defaultRepRange?.[1] ?? 12));
+      setRpe(editExercise.defaultRPE ?? 8);
+      setNotes(editExercise.notes || '');
+      setSaving(false);
+    } else if (visible) {
+      reset();
+    }
+  }, [visible, editExercise]);
 
   function reset() {
     setName(''); setSelectedActions([]); setRepMin('8');
@@ -55,19 +69,29 @@ export default function CustomExerciseModal({ visible, onClose, onSaved }) {
 
     setSaving(true);
     try {
-      const exercise = {
-        id: `custom_${uuidv4()}`,
-        name: name.trim(),
-        jointActions: selectedActions,
-        muscles: [],
-        defaultRepRange: [min, max],
-        defaultRPE: rpe,
-        notes: notes.trim(),
-        isCustom: true,
-        stability: 'medium',
-        coordinationDemand: 'medium',
-        createdAt: new Date().toISOString(),
-      };
+      const exercise = editExercise
+        ? {
+            ...editExercise,
+            name: name.trim(),
+            jointActions: selectedActions,
+            defaultRepRange: [min, max],
+            defaultRPE: rpe,
+            notes: notes.trim(),
+            updatedAt: new Date().toISOString(),
+          }
+        : {
+            id: `custom_${uuidv4()}`,
+            name: name.trim(),
+            jointActions: selectedActions,
+            muscles: [],
+            defaultRepRange: [min, max],
+            defaultRPE: rpe,
+            notes: notes.trim(),
+            isCustom: true,
+            stability: 'medium',
+            coordinationDemand: 'medium',
+            createdAt: new Date().toISOString(),
+          };
       await saveCustomExercise(exercise);
       reset();
       onSaved(exercise);
@@ -87,7 +111,7 @@ export default function CustomExerciseModal({ visible, onClose, onSaved }) {
           <TouchableOpacity onPress={handleClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
             <Text style={styles.headerCancel}>Cancel</Text>
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Custom exercise</Text>
+          <Text style={styles.headerTitle}>{editExercise ? 'Edit exercise' : 'Custom exercise'}</Text>
           <TouchableOpacity onPress={handleSave} disabled={!isValid || saving}>
             {saving
               ? <ActivityIndicator color={colors.primary} size="small" />

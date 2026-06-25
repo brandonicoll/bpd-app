@@ -501,6 +501,8 @@ export default function ProgramOverviewScreen({ navigation }) {
   const [addModal, setAddModal] = useState({ visible: false, dayLabel: null, existingIds: [], preSelectedId: null });
   const [showChangeSplit, setShowChangeSplit] = useState(false);
   const [showCreateCustom, setShowCreateCustom] = useState(false);
+  const [showEditCustom, setShowEditCustom] = useState(false);
+  const [editingCustomExercise, setEditingCustomExercise] = useState(null);
   const createCustomContext = useRef(null);
 
   // iOS only supports one Modal at a time. Close the sub-modal first,
@@ -768,13 +770,26 @@ export default function ProgramOverviewScreen({ navigation }) {
                         </TouchableOpacity>
 
                         {isEditing ? (
-                          <TouchableOpacity
-                            onPress={() => handleDeleteExercise(day.dayLabel, exConfig.exerciseId, day.exercises.length)}
-                            style={styles.deleteBtn}
-                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                          >
-                            <Ionicons name="trash-outline" size={18} color="#E53E3E" />
-                          </TouchableOpacity>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+                            {ex.isCustom && (
+                              <TouchableOpacity
+                                onPress={() => {
+                                  setEditingCustomExercise(ex);
+                                  setShowEditCustom(true);
+                                }}
+                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                              >
+                                <Ionicons name="pencil-outline" size={18} color={colors.primary} />
+                              </TouchableOpacity>
+                            )}
+                            <TouchableOpacity
+                              onPress={() => handleDeleteExercise(day.dayLabel, exConfig.exerciseId, day.exercises.length)}
+                              style={styles.deleteBtn}
+                              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                            >
+                              <Ionicons name="trash-outline" size={18} color="#E53E3E" />
+                            </TouchableOpacity>
+                          </View>
                         ) : (
                           <>
                             <TouchableOpacity
@@ -865,6 +880,14 @@ export default function ProgramOverviewScreen({ navigation }) {
           createCustomContext.current = null;
         }}
         onSaved={handleCustomExerciseSaved}
+      />
+
+      {/* Custom exercise editor */}
+      <CustomExerciseModal
+        visible={showEditCustom}
+        editExercise={editingCustomExercise}
+        onClose={() => { setShowEditCustom(false); setEditingCustomExercise(null); }}
+        onSaved={() => { setShowEditCustom(false); setEditingCustomExercise(null); load(); }}
       />
     </SafeAreaView>
   );
