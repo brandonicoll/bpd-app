@@ -18,6 +18,7 @@ export default function ExerciseLibraryScreen({ navigation }) {
   const [query, setQuery] = useState('');
   const [customExercises, setCustomExercises] = useState([]);
   const [modalVisible, setModalVisible] = useState(false);
+  const [editingExercise, setEditingExercise] = useState(null);
 
   const loadCustom = useCallback(async () => {
     const custom = await getCustomExercises();
@@ -51,6 +52,12 @@ export default function ExerciseLibraryScreen({ navigation }) {
     const updated = await getCustomExercises();
     setCustomExercises(updated);
     setModalVisible(false);
+  }
+
+  async function handleEditSaved() {
+    const updated = await getCustomExercises();
+    setCustomExercises(updated);
+    setEditingExercise(null);
   }
 
   function handleDelete(exercise) {
@@ -145,13 +152,20 @@ export default function ExerciseLibraryScreen({ navigation }) {
                   </Text>
                 </View>
                 {item.isCustom && (
-                  <TouchableOpacity
-                    onPress={() => handleDelete(item)}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    style={styles.deleteBtn}
-                  >
-                    <Ionicons name="trash-outline" size={16} color={colors.danger} />
-                  </TouchableOpacity>
+                  <View style={styles.customActions}>
+                    <TouchableOpacity
+                      onPress={() => setEditingExercise(item)}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <Ionicons name="pencil-outline" size={16} color={colors.primary} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => handleDelete(item)}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <Ionicons name="trash-outline" size={16} color={colors.danger} />
+                    </TouchableOpacity>
+                  </View>
                 )}
               </View>
             </TouchableOpacity>
@@ -179,6 +193,13 @@ export default function ExerciseLibraryScreen({ navigation }) {
         visible={modalVisible}
         onClose={() => setModalVisible(false)}
         onSaved={handleSaved}
+      />
+
+      <CustomExerciseModal
+        visible={!!editingExercise}
+        editExercise={editingExercise}
+        onClose={() => setEditingExercise(null)}
+        onSaved={handleEditSaved}
       />
     </SafeAreaView>
   );
@@ -265,7 +286,7 @@ const makeStyles = (colors) => StyleSheet.create({
     paddingVertical: 4,
   },
   repBadgeText: { fontSize: fontSizes.xs, fontWeight: '700', color: colors.textSecondary },
-  deleteBtn: { padding: 2 },
+  customActions: { flexDirection: 'row', gap: spacing.md, alignItems: 'center' },
 
   empty: { paddingVertical: spacing.xl, alignItems: 'center' },
   emptyText: { fontSize: fontSizes.sm, color: colors.textSecondary },
