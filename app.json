@@ -14,7 +14,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.bpfcoaching.programming",
-      "buildNumber": "6",
+      "buildNumber": "8",
       "infoPlist": {
         "NSCameraUsageDescription": "Used for sharing your progress card.",
         "NSPhotoLibraryUsageDescription": "Used to save your progress card to your photo library.",
