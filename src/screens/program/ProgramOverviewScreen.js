@@ -753,9 +753,9 @@ export default function ProgramOverviewScreen({ navigation }) {
                 onPress={() => setShowReorderDays(true)}
                 style={styles.reorderDaysBtn}
                 activeOpacity={0.8}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
-                <Ionicons name="swap-vertical-outline" size={14} color={colors.primary} />
-                <Text style={styles.reorderDaysBtnText}>Reorder</Text>
+                <Ionicons name="swap-vertical-outline" size={18} color={colors.primary} />
               </TouchableOpacity>
             )}
             <TouchableOpacity
@@ -1046,16 +1046,14 @@ const makeStyles = (colors) => StyleSheet.create({
   },
   headerBtns: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   reorderDaysBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    borderRadius: borderRadius.full,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     borderWidth: 1.5,
     borderColor: colors.primary,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  reorderDaysBtnText: { fontSize: fontSizes.xs, fontWeight: '700', color: colors.primary },
   changeSplitBtn: {
     backgroundColor: colors.primary,
     borderRadius: borderRadius.full,
