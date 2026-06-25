@@ -387,6 +387,14 @@ export async function renameProgramDay(dayLabel, displayName) {
   return saveCurrentProgram({ ...program, splitDays: updatedSplitDays });
 }
 
+export async function reorderSplitDays(orderedDayLabels) {
+  const program = await getCurrentProgram();
+  if (!program) return false;
+  const dayMap = Object.fromEntries(program.splitDays.map(d => [d.dayLabel, d]));
+  const reordered = orderedDayLabels.map(label => dayMap[label]).filter(Boolean);
+  return saveCurrentProgram({ ...program, splitDays: reordered });
+}
+
 // Update training age on both program and user profile
 export async function updateTrainingAge(trainingAge) {
   const [program, profile] = await Promise.all([getCurrentProgram(), getUserProfile()]);

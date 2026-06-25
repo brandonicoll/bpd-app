@@ -10,14 +10,14 @@ import { useTheme } from '../../theme/ThemeContext';
 import {
   getCurrentProgram, swapExerciseInProgram, getCustomExercises,
   addExerciseToProgram, removeExerciseFromProgram, setExerciseOrderForDay,
-  renameProgramDay,
+  renameProgramDay, reorderSplitDays,
 } from '../../services/storage';
 import { getCurrentBlockInfo } from '../../services/programEngine';
 import { exercises as exerciseLibrary, getSwapCandidates } from '../../data/exercises';
 import { JOINT_ACTION_LABELS } from '../../data/jointActionLabels';
 import CustomExerciseModal from '../../components/common/CustomExerciseModal';
 import ChangeSplitModal from '../../components/program/ChangeSplitModal';
-import { NestableDraggableFlatList, NestableScrollContainer, ScaleDecorator } from 'react-native-draggable-flatlist';
+import DraggableFlatList, { NestableDraggableFlatList, NestableScrollContainer, ScaleDecorator } from 'react-native-draggable-flatlist';
 
 function getExercise(id) {
   return exerciseLibrary.find(e => e.id === id);
@@ -482,6 +482,115 @@ const makeAddStyles = (colors) => StyleSheet.create({
   },
 });
 
+// ─── Reorder days modal ───────────────────────────────────────────────────────
+function ReorderDaysModal({ visible, splitDays, onClose, onSaved }) {
+  const { colors } = useTheme();
+  const swapStyles = makeSwapStyles(colors);
+  const reorderStyles = makeReorderStyles(colors);
+  const [days, setDays] = useState([]);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (visible) setDays(splitDays.map(d => ({ ...d })));
+  }, [visible, splitDays]);
+
+  async function handleSave() {
+    setSaving(true);
+    await onSaved(days.map(d => d.dayLabel));
+    setSaving(false);
+  }
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <TouchableOpacity style={swapStyles.overlay} onPress={onClose} activeOpacity={1} />
+      <View style={reorderStyles.sheet}>
+        <View style={swapStyles.handle} />
+        <Text style={swapStyles.title}>Reorder training days</Text>
+        <Text style={reorderStyles.hint}>Hold and drag to reorder</Text>
+
+        <DraggableFlatList
+          data={days}
+          keyExtractor={item => item.dayLabel}
+          onDragEnd={({ data }) => setDays(data)}
+          style={reorderStyles.list}
+          renderItem={({ item, drag, isActive }) => (
+            <ScaleDecorator>
+              <TouchableOpacity
+                onLongPress={drag}
+                delayLongPress={120}
+                activeOpacity={0.9}
+                style={[reorderStyles.dayRow, isActive && reorderStyles.dayRowActive]}
+              >
+                <Ionicons name="reorder-three-outline" size={22} color={colors.textTertiary} style={reorderStyles.handle} />
+                <Text style={reorderStyles.dayName}>{item.displayName || item.dayLabel}</Text>
+                <Text style={reorderStyles.exerciseCount}>{item.exercises.length} exercises</Text>
+              </TouchableOpacity>
+            </ScaleDecorator>
+          )}
+        />
+
+        <View style={swapStyles.footer}>
+          <TouchableOpacity onPress={onClose} style={swapStyles.cancelBtn} activeOpacity={0.7}>
+            <Text style={swapStyles.cancelText}>Cancel</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={handleSave}
+            disabled={saving}
+            activeOpacity={0.8}
+            style={[swapStyles.confirmBtn, saving && swapStyles.confirmBtnDisabled]}
+          >
+            {saving
+              ? <ActivityIndicator color="#fff" size="small" />
+              : <Text style={swapStyles.confirmText}>Save order</Text>
+            }
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+const makeReorderStyles = (colors) => StyleSheet.create({
+  sheet: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: colors.background,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: spacing.lg,
+    paddingBottom: 36,
+    maxHeight: '70%',
+  },
+  hint: {
+    fontSize: fontSizes.xs,
+    color: colors.textTertiary,
+    marginBottom: spacing.md,
+  },
+  list: { marginBottom: spacing.sm },
+  dayRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingVertical: 14,
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  dayRowActive: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primaryLight,
+    shadowOpacity: 0.15,
+    elevation: 4,
+  },
+  handle: { marginRight: spacing.md },
+  dayName: { flex: 1, fontSize: fontSizes.md, fontWeight: '700', color: colors.text },
+  exerciseCount: { fontSize: fontSizes.xs, color: colors.textTertiary, fontWeight: '500' },
+});
+
 // ─── ProgramOverviewScreen ────────────────────────────────────────────────────
 export default function ProgramOverviewScreen({ navigation }) {
   const { colors } = useTheme();
@@ -500,6 +609,7 @@ export default function ProgramOverviewScreen({ navigation }) {
   const [editingDay, setEditingDay] = useState(null);
   const [addModal, setAddModal] = useState({ visible: false, dayLabel: null, existingIds: [], preSelectedId: null });
   const [showChangeSplit, setShowChangeSplit] = useState(false);
+  const [showReorderDays, setShowReorderDays] = useState(false);
   const [showCreateCustom, setShowCreateCustom] = useState(false);
   const [showEditCustom, setShowEditCustom] = useState(false);
   const [editingCustomExercise, setEditingCustomExercise] = useState(null);
@@ -637,13 +747,25 @@ export default function ProgramOverviewScreen({ navigation }) {
         {/* Header */}
         <View style={styles.screenHeader}>
           <Text style={styles.screenTitle}>My program</Text>
-          <TouchableOpacity
-            onPress={() => setShowChangeSplit(true)}
-            style={styles.changeSplitBtn}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.changeSplitBtnText}>Change split</Text>
-          </TouchableOpacity>
+          <View style={styles.headerBtns}>
+            {program?.splitDays?.length > 1 && (
+              <TouchableOpacity
+                onPress={() => setShowReorderDays(true)}
+                style={styles.reorderDaysBtn}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="swap-vertical-outline" size={14} color={colors.primary} />
+                <Text style={styles.reorderDaysBtnText}>Reorder</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity
+              onPress={() => setShowChangeSplit(true)}
+              style={styles.changeSplitBtn}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.changeSplitBtnText}>Change split</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Block + week progress card */}
@@ -889,6 +1011,18 @@ export default function ProgramOverviewScreen({ navigation }) {
         onClose={() => { setShowEditCustom(false); setEditingCustomExercise(null); }}
         onSaved={() => { setShowEditCustom(false); setEditingCustomExercise(null); load(); }}
       />
+
+      {/* Reorder split days modal */}
+      <ReorderDaysModal
+        visible={showReorderDays}
+        splitDays={program?.splitDays || []}
+        onClose={() => setShowReorderDays(false)}
+        onSaved={async (orderedLabels) => {
+          await reorderSplitDays(orderedLabels);
+          setShowReorderDays(false);
+          load();
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -910,6 +1044,18 @@ const makeStyles = (colors) => StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: spacing.md,
   },
+  headerBtns: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  reorderDaysBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderRadius: borderRadius.full,
+    borderWidth: 1.5,
+    borderColor: colors.primary,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  reorderDaysBtnText: { fontSize: fontSizes.xs, fontWeight: '700', color: colors.primary },
   changeSplitBtn: {
     backgroundColor: colors.primary,
     borderRadius: borderRadius.full,
