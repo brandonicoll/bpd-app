@@ -796,14 +796,20 @@ export default function ProgramOverviewScreen({ navigation }) {
             </View>
 
             {blockInfo.blockNumber === 3 && (
-              <Text style={styles.blockWarning}>
-                🔒 Data collection phase — keep exercises consistent until week 11.
-              </Text>
+              <View style={styles.blockNotice}>
+                <Ionicons name="lock-closed" size={12} color={colors.warning} style={styles.blockNoticeIcon} />
+                <Text style={styles.blockWarning}>
+                  Data collection phase — keep exercises consistent until week 11.
+                </Text>
+              </View>
             )}
             {blockInfo.blockNumber === 4 && (
-              <Text style={styles.blockHint}>
-                ✅ Optimization phase — feel free to swap underperforming exercises.
-              </Text>
+              <View style={styles.blockNotice}>
+                <Ionicons name="checkmark-circle" size={12} color={colors.success} style={styles.blockNoticeIcon} />
+                <Text style={styles.blockHint}>
+                  Optimization phase — feel free to swap underperforming exercises.
+                </Text>
+              </View>
             )}
           </View>
         )}
@@ -1112,13 +1118,21 @@ const makeStyles = (colors) => StyleSheet.create({
     marginBottom: spacing.sm,
   },
   progressBarLabel: { fontSize: 10, color: colors.textTertiary },
+  blockNotice: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 5,
+  },
+  blockNoticeIcon: { marginTop: 2 },
   blockWarning: {
+    flex: 1,
     fontSize: fontSizes.xs,
     color: colors.warning,
     fontWeight: '500',
     lineHeight: 17,
   },
   blockHint: {
+    flex: 1,
     fontSize: fontSizes.xs,
     color: colors.success,
     fontWeight: '500',
