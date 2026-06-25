@@ -26,6 +26,7 @@ export default function HomeScreen({ navigation }) {
   const {
     program,
     blockInfo,
+    allSessions,
     sessionsThisWeek,
     streak,
     showNutritionCheckIn,
@@ -61,8 +62,8 @@ export default function HomeScreen({ navigation }) {
     );
   }
 
-  const nextSession = getNextSession(program, sessionsThisWeek);
-  const allDoneThisWeek = !nextSession;
+  const nextSession = getNextSession(program, allSessions);
+  const allDoneThisWeek = sessionsThisWeek.length >= program.daysPerWeek;
   const currentStreak = streak?.currentStreak || 0;
 
   return (

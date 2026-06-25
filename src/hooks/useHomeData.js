@@ -12,6 +12,7 @@ export function useHomeData() {
   const [data, setData] = useState({
     program: null,
     blockInfo: null,
+    allSessions: [],
     sessionsThisWeek: [],
     streak: null,
     showNutritionCheckIn: false,
@@ -38,6 +39,7 @@ export function useHomeData() {
       setData({
         program,
         blockInfo,
+        allSessions,
         sessionsThisWeek,
         streak,
         showNutritionCheckIn,
@@ -57,17 +59,29 @@ export function useHomeData() {
   return { ...data, refresh: load };
 }
 
-// Determine which split day is "up next" for the user this week
-export function getNextSession(program, sessionsThisWeek) {
-  if (!program || !program.splitDays) return null;
+// Determine which split day is "up next" based on the last logged session.
+// Uses rotation position rather than what's been done this week, so skipped
+// workouts don't cause the app to replay them.
+export function getNextSession(program, allSessions) {
+  if (!program || !program.splitDays || program.splitDays.length === 0) return null;
 
-  // Get the dayLabels already completed this week
-  const completedDayLabels = sessionsThisWeek.map(s => s.splitDayLabel);
+  const splitDays = program.splitDays;
 
-  // Find the first split day not yet done this week
-  const nextDay = program.splitDays.find(
-    day => !completedDayLabels.includes(day.dayLabel)
-  );
+  if (!allSessions || allSessions.length === 0) return splitDays[0];
 
-  return nextDay || null; // null means all sessions done this week
+  // Find the most recently logged session
+  const lastSession = [...allSessions].sort(
+    (a, b) => new Date(b.date) - new Date(a.date)
+  )[0];
+
+  // Find its position in the current split rotation
+  const lastIndex = splitDays.findIndex(d => d.dayLabel === lastSession.splitDayLabel);
+
+  if (lastIndex === -1) {
+    // Last session's dayLabel doesn't match the current program (split changed, etc.)
+    return splitDays[0];
+  }
+
+  // Advance one step in the rotation, wrapping back to the start
+  return splitDays[(lastIndex + 1) % splitDays.length];
 }
