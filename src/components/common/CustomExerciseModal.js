@@ -7,7 +7,7 @@ import 'react-native-get-random-values';
 import { v4 as uuidv4 } from 'uuid';
 import { useTheme } from '../../theme/ThemeContext';
 import { spacing, fontSizes, borderRadius } from '../../theme';
-import { saveCustomExercise } from '../../services/storage';
+import { saveCustomExercise, saveExerciseOverride } from '../../services/storage';
 import { JOINT_ACTION_LABELS, JOINT_ACTION_KEYS } from '../../data/jointActionLabels';
 
 const RPE_OPTIONS = [6, 7, 8, 9, 10];
@@ -69,30 +69,46 @@ export default function CustomExerciseModal({ visible, onClose, onSaved, editExe
 
     setSaving(true);
     try {
-      const exercise = editExercise
-        ? {
-            ...editExercise,
-            name: name.trim(),
-            jointActions: selectedActions,
-            defaultRepRange: [min, max],
-            defaultRPE: rpe,
-            notes: notes.trim(),
-            updatedAt: new Date().toISOString(),
-          }
-        : {
-            id: `custom_${uuidv4()}`,
-            name: name.trim(),
-            jointActions: selectedActions,
-            muscles: [],
-            defaultRepRange: [min, max],
-            defaultRPE: rpe,
-            notes: notes.trim(),
-            isCustom: true,
-            stability: 'medium',
-            coordinationDemand: 'medium',
-            createdAt: new Date().toISOString(),
-          };
-      await saveCustomExercise(exercise);
+      const isBuiltIn = editExercise && !editExercise.isCustom;
+      let exercise;
+
+      if (isBuiltIn) {
+        const overrideData = {
+          name: name.trim(),
+          jointActions: selectedActions,
+          defaultRepRange: [min, max],
+          defaultRPE: rpe,
+          notes: notes.trim(),
+        };
+        await saveExerciseOverride(editExercise.id, overrideData);
+        exercise = { ...editExercise, ...overrideData };
+      } else if (editExercise) {
+        exercise = {
+          ...editExercise,
+          name: name.trim(),
+          jointActions: selectedActions,
+          defaultRepRange: [min, max],
+          defaultRPE: rpe,
+          notes: notes.trim(),
+          updatedAt: new Date().toISOString(),
+        };
+        await saveCustomExercise(exercise);
+      } else {
+        exercise = {
+          id: `custom_${uuidv4()}`,
+          name: name.trim(),
+          jointActions: selectedActions,
+          muscles: [],
+          defaultRepRange: [min, max],
+          defaultRPE: rpe,
+          notes: notes.trim(),
+          isCustom: true,
+          stability: 'medium',
+          coordinationDemand: 'medium',
+          createdAt: new Date().toISOString(),
+        };
+        await saveCustomExercise(exercise);
+      }
       reset();
       onSaved(exercise);
     } catch (e) {

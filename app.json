@@ -14,10 +14,10 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.bpfcoaching.programming",
-      "buildNumber": "8",
+      "buildNumber": "9",
       "infoPlist": {
-        "NSCameraUsageDescription": "Used for sharing your progress card.",
-        "NSPhotoLibraryUsageDescription": "Used to save your progress card to your photo library.",
+        "NSCameraUsageDescription": "Used to take progress photos.",
+        "NSPhotoLibraryUsageDescription": "Used to select and save progress photos.",
         "NSPhotoLibraryAddUsageDescription": "Used to save your progress card to your photo library.",
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -31,6 +31,13 @@
       }
     },
     "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Used to select and save progress photos.",
+          "cameraPermission": "Used to take progress photos."
+        }
+      ],
       [
         "expo-notifications",
         {

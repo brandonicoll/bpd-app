@@ -316,6 +316,30 @@ export async function deleteCustomExercise(id) {
   return setItem(CUSTOM_EXERCISES_KEY, existing.filter(e => e.id !== id));
 }
 
+const EXERCISE_OVERRIDES_KEY = 'exerciseOverrides';
+
+export async function getExerciseOverrides() {
+  const data = await getItem(EXERCISE_OVERRIDES_KEY);
+  return data || {};
+}
+
+export async function saveExerciseOverride(id, overrides) {
+  const existing = await getExerciseOverrides();
+  existing[id] = { ...overrides, updatedAt: new Date().toISOString() };
+  return setItem(EXERCISE_OVERRIDES_KEY, existing);
+}
+
+export async function updateExerciseInProgram(dayLabel, exerciseId, updates) {
+  const program = await getCurrentProgram();
+  if (!program) return false;
+  const day = program.splitDays.find(d => d.dayLabel === dayLabel);
+  if (!day) return false;
+  const idx = day.exercises.findIndex(e => e.exerciseId === exerciseId);
+  if (idx === -1) return false;
+  day.exercises[idx] = { ...day.exercises[idx], ...updates };
+  return saveCurrentProgram(program);
+}
+
 // Add an exercise to a split day
 export async function addExerciseToProgram(dayLabel, exerciseId, exerciseConfig) {
   const program = await getCurrentProgram();

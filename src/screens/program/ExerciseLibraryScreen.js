@@ -8,7 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { spacing, fontSizes, borderRadius } from '../../theme';
 import { useTheme } from '../../theme/ThemeContext';
 import { exercises as builtInExercises } from '../../data/exercises';
-import { getCustomExercises, deleteCustomExercise } from '../../services/storage';
+import { getCustomExercises, deleteCustomExercise, getExerciseOverrides } from '../../services/storage';
 import { JOINT_ACTION_LABELS } from '../../data/jointActionLabels';
 import CustomExerciseModal from '../../components/common/CustomExerciseModal';
 
@@ -17,12 +17,14 @@ export default function ExerciseLibraryScreen({ navigation }) {
   const styles = makeStyles(colors);
   const [query, setQuery] = useState('');
   const [customExercises, setCustomExercises] = useState([]);
+  const [overrides, setOverrides] = useState({});
   const [modalVisible, setModalVisible] = useState(false);
   const [editingExercise, setEditingExercise] = useState(null);
 
   const loadCustom = useCallback(async () => {
-    const custom = await getCustomExercises();
+    const [custom, ovr] = await Promise.all([getCustomExercises(), getExerciseOverrides()]);
     setCustomExercises(custom);
+    setOverrides(ovr);
   }, []);
 
   useFocusEffect(
@@ -32,9 +34,9 @@ export default function ExerciseLibraryScreen({ navigation }) {
   );
 
   const allExercises = useMemo(() => [
-    ...builtInExercises,
+    ...builtInExercises.map(e => overrides[e.id] ? { ...e, ...overrides[e.id] } : e),
     ...customExercises,
-  ], [customExercises]);
+  ], [customExercises, overrides]);
 
   const filtered = useMemo(() => {
     if (!query.trim()) return allExercises;
@@ -55,8 +57,9 @@ export default function ExerciseLibraryScreen({ navigation }) {
   }
 
   async function handleEditSaved() {
-    const updated = await getCustomExercises();
-    setCustomExercises(updated);
+    const [custom, ovr] = await Promise.all([getCustomExercises(), getExerciseOverrides()]);
+    setCustomExercises(custom);
+    setOverrides(ovr);
     setEditingExercise(null);
   }
 
@@ -151,22 +154,22 @@ export default function ExerciseLibraryScreen({ navigation }) {
                     {item.defaultRepRange[0]}–{item.defaultRepRange[1]}
                   </Text>
                 </View>
-                {item.isCustom && (
-                  <View style={styles.customActions}>
-                    <TouchableOpacity
-                      onPress={() => setEditingExercise(item)}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    >
-                      <Ionicons name="pencil-outline" size={16} color={colors.primary} />
-                    </TouchableOpacity>
+                <View style={styles.customActions}>
+                  <TouchableOpacity
+                    onPress={() => setEditingExercise(item)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Ionicons name="pencil-outline" size={16} color={colors.primary} />
+                  </TouchableOpacity>
+                  {item.isCustom && (
                     <TouchableOpacity
                       onPress={() => handleDelete(item)}
                       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                     >
                       <Ionicons name="trash-outline" size={16} color={colors.danger} />
                     </TouchableOpacity>
-                  </View>
-                )}
+                  )}
+                </View>
               </View>
             </TouchableOpacity>
           )}
