@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { advanceWeek } from './programEngine';
 
 // ─── Storage keys ──────────────────────────────────────────────
 const KEYS = {
@@ -77,6 +78,40 @@ export async function updateCurrentBlock(blockNumber, weekNumber) {
   const program = await getCurrentProgram();
   if (!program) return false;
   return saveCurrentProgram({ ...program, currentBlock: blockNumber, currentWeek: weekNumber });
+}
+
+// Called after each session save. Advances the program week when the user
+// has completed all planned sessions since the last week started.
+export async function maybeAdvanceProgramWeek() {
+  const [program, allSessions] = await Promise.all([getCurrentProgram(), getAllSessions()]);
+  if (!program) return false;
+
+  const weekStartedAt = new Date(program.weekStartedAt || program.startDate);
+  const sessionsThisTrainingWeek = allSessions.filter(
+    s => new Date(s.date) > weekStartedAt
+  ).length;
+
+  if (sessionsThisTrainingWeek >= program.daysPerWeek) {
+    await saveCurrentProgram(advanceWeek(program));
+    return true;
+  }
+  return false;
+}
+
+// Called on app load. If 10+ days have elapsed without completing the week,
+// auto-advance so the user isn't permanently stuck on a missed week.
+export async function checkFallbackWeekAdvance() {
+  const program = await getCurrentProgram();
+  if (!program) return false;
+
+  const weekStartedAt = new Date(program.weekStartedAt || program.startDate);
+  const daysSince = (Date.now() - weekStartedAt.getTime()) / (1000 * 60 * 60 * 24);
+
+  if (daysSince >= 10) {
+    await saveCurrentProgram(advanceWeek(program));
+    return true;
+  }
+  return false;
 }
 
 // ─── Workout Sessions ──────────────────────────────────────────

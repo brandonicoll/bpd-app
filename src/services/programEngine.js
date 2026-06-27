@@ -238,6 +238,7 @@ export function buildDefaultProgram(profile) {
     currentWeek: 1,
     mesocycle: 1,
     age: age || null,
+    weekStartedAt: new Date().toISOString(),
     splitDays,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -261,5 +262,12 @@ export function advanceWeek(program) {
   if (currentWeek === 5 && currentBlock === 2) currentBlock = 3;
   if (currentWeek === 11 && currentBlock === 3) currentBlock = 4;
   if (currentWeek === 13) { currentWeek = 3; currentBlock = 2; mesocycle += 1; }
-  return { ...program, currentWeek, currentBlock, mesocycle, updatedAt: new Date().toISOString() };
+  return {
+    ...program,
+    currentWeek,
+    currentBlock,
+    mesocycle,
+    weekStartedAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
 }

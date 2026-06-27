@@ -4,6 +4,7 @@ import {
   getAllSessions,
   getStreak,
   getAllCheckIns,
+  checkFallbackWeekAdvance,
 } from '../services/storage';
 import { getCurrentBlockInfo } from '../services/programEngine';
 import { isThisWeek, currentWeekKey } from '../utils/dateHelpers';
@@ -22,6 +23,7 @@ export function useHomeData() {
 
   const load = useCallback(async () => {
     try {
+      await checkFallbackWeekAdvance();
       const [program, allSessions, streak, checkIns] = await Promise.all([
         getCurrentProgram(),
         getAllSessions(),

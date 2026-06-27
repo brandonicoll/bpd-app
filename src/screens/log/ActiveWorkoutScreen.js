@@ -11,6 +11,7 @@ import { spacing, fontSizes, borderRadius } from '../../theme';
 import { useTheme } from '../../theme/ThemeContext';
 import {
   saveSession,
+  maybeAdvanceProgramWeek,
   getLastSessionForExercise,
   updateStreak,
   getWeightUnit,
@@ -727,6 +728,7 @@ export default function ActiveWorkoutScreen({ navigation, route }) {
 
       await saveSession(session);
       await clearDraftSession();
+      await maybeAdvanceProgramWeek();
 
       const weekStart = getWeekStart().toISOString().split('T')[0];
       await updateStreak({ weekStartDate: weekStart, planned: 1 });
