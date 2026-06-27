@@ -26,6 +26,8 @@ export const REC_TYPES = {
   INCREASE_VOLUME:            'INCREASE_VOLUME',
   REDUCE_JOINT_ACTION_VOLUME: 'REDUCE_JOINT_ACTION_VOLUME',
   REORDER_EXERCISE:           'REORDER_EXERCISE',
+  DELOAD_SIGNAL:              'DELOAD_SIGNAL',
+  PUSH_PULL_IMBALANCE:        'PUSH_PULL_IMBALANCE',
 };
 
 export const SEVERITY = {
@@ -34,9 +36,33 @@ export const SEVERITY = {
   INFO:   'info',
 };
 
-const JOINT_ACTION_HIGH_VOLUME_THRESHOLD = 8;
-const INTER_SESSION_RECOVERY_THRESHOLD   = 0.97;
-const MIN_INTER_SESSION_COMPARISONS      = 3;
+// Volume thresholds scale with training age (sets/week per joint action)
+const JOINT_ACTION_VOLUME_THRESHOLDS = {
+  [TRAINING_AGE.BEGINNER]:     6,
+  [TRAINING_AGE.INTERMEDIATE]: 8,
+  [TRAINING_AGE.ADVANCED]:     12,
+};
+
+// Baseline inter-session recovery threshold (second session vs first session e1RM ratio)
+const BASE_RECOVERY_THRESHOLD = 0.97;
+
+// Push and pull joint actions for balance check
+const PUSH_JOINT_ACTIONS = ['horizontal_shoulder_adduction', 'shoulder_abduction'];
+const PULL_JOINT_ACTIONS = ['horizontal_humeral_abduction', 'shoulder_adduction'];
+
+const MIN_INTER_SESSION_COMPARISONS = 3;
+
+// ─── Age-adjusted helpers ─────────────────────────────────────────────────────
+function getPlateauThreshold(trainingAge, age) {
+  const base = PLATEAU_THRESHOLDS[trainingAge] || 4;
+  // 50+ lifters adapt slower — extend the window before flagging a stall
+  return (age != null && age >= 50) ? base + 2 : base;
+}
+
+function getRecoveryThreshold(age) {
+  // 50+ lifters have longer inter-session recovery — only flag at 8% drop, not 3%
+  return (age != null && age >= 50) ? 0.92 : BASE_RECOVERY_THRESHOLD;
+}
 
 // ─── Helper: group sessions by week ──────────────────────────────────────────
 function groupSessionsByWeek(allSessions) {
@@ -66,7 +92,6 @@ function getAvgRPEForExercise(exerciseId, allSessions, lastN = 4) {
 }
 
 // ─── Helper: avg energy from session energy ratings ──────────────────────────
-// Returns null if fewer than 3 sessions have been rated
 function getAvgEnergyFromSessions(allSessions, lastN = 8) {
   const recentRated = allSessions
     .filter(s => s.energyRating != null)
@@ -75,6 +100,35 @@ function getAvgEnergyFromSessions(allSessions, lastN = 8) {
 
   if (recentRated.length < 3) return null;
   return recentRated.reduce((sum, s) => sum + s.energyRating, 0) / recentRated.length;
+}
+
+// ─── Helper: volume load (sets × reps × weight) for one exercise in a session ─
+function getSessionVolumeLoad(exerciseId, session) {
+  const exData = session.exercises?.find(e => e.exerciseId === exerciseId);
+  if (!exData?.sets?.length) return 0;
+  return exData.sets.reduce((sum, s) => {
+    const w = parseFloat(s.weight) || 0;
+    const r = parseInt(s.reps) || 0;
+    return sum + w * r;
+  }, 0);
+}
+
+// Returns { deltaPercent, firstVL, lastVL } or null if insufficient data
+function getVolumeLoadTrend(exerciseId, allSessions, lastN) {
+  const sessions = allSessions
+    .filter(s => s.exercises?.some(e => e.exerciseId === exerciseId))
+    .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+  if (sessions.length < 2) return null;
+  const window = sessions.slice(-lastN);
+  const firstVL = getSessionVolumeLoad(exerciseId, window[0]);
+  const lastVL  = getSessionVolumeLoad(exerciseId, window[window.length - 1]);
+  if (!firstVL) return null;
+  return {
+    deltaPercent: ((lastVL - firstVL) / firstVL) * 100,
+    firstVL: Math.round(firstVL),
+    lastVL:  Math.round(lastVL),
+  };
 }
 
 // ─── Joint action metrics ─────────────────────────────────────────────────────
@@ -111,8 +165,7 @@ export function calculateJointActionMetrics(program, exerciseTrends, allSessions
     }
   }
 
-  // Also account for exercises logged in sessions but not currently in the program
-  // (custom exercises added ad-hoc). Estimate weekly sets from recent session data.
+  // Also account for exercises in sessions but not currently in the program
   for (const trend of exerciseTrends) {
     if (seenInProgram.has(trend.exerciseId) || trend.sessionsLogged === 0) continue;
     const exDef = findExercise(trend.exerciseId);
@@ -168,7 +221,7 @@ export function calculateJointActionMetrics(program, exerciseTrends, allSessions
 }
 
 // ─── Inter-session recovery detection ────────────────────────────────────────
-export function detectInterSessionRecovery(jointAction, program, allSessions) {
+export function detectInterSessionRecovery(jointAction, program, allSessions, recoveryThreshold = BASE_RECOVERY_THRESHOLD) {
   const daysWithAction = program.splitDays.filter(day =>
     day.exercises.some(exConfig => {
       const exDef = findExercise(exConfig.exerciseId);
@@ -222,7 +275,7 @@ export function detectInterSessionRecovery(jointAction, program, allSessions) {
   const avgRatio = comparisons.reduce((sum, c) => sum + c.ratio, 0) / comparisons.length;
 
   return {
-    hasRecoveryIssue: avgRatio < INTER_SESSION_RECOVERY_THRESHOLD,
+    hasRecoveryIssue: avgRatio < recoveryThreshold,
     avgRatio: Math.round(avgRatio * 1000) / 1000,
     sampleSize: comparisons.length,
   };
@@ -332,17 +385,69 @@ function checkFatigueFlag(allSessions) {
   return null;
 }
 
+// ─── Rule: Mid-Block 3 deload signal ─────────────────────────────────────────
+function checkMidBlockFatigue(program, allSessions) {
+  // Only fires from week 8 onward in Block 3 (4+ weeks of accumulated loading)
+  if (program.currentBlock !== 3 || program.currentWeek < 8) return null;
+
+  const energyRatedSessions = allSessions
+    .filter(s => s.energyRating != null)
+    .sort((a, b) => new Date(b.date) - new Date(a.date));
+
+  // Need at least 6 rated sessions to compare recent vs prior trend
+  if (energyRatedSessions.length < 6) return null;
+
+  const recent3 = energyRatedSessions.slice(0, 3);
+  const prior3  = energyRatedSessions.slice(3, 6);
+
+  const recentAvg = recent3.reduce((s, x) => s + x.energyRating, 0) / 3;
+  const priorAvg  = prior3.reduce((s, x) => s + x.energyRating, 0) / 3;
+
+  // Energy must be declining meaningfully (not just noise)
+  if (priorAvg - recentAvg < 0.4) return null;
+
+  // Second signal: check if average RPE is elevated (fatigue masking true strength)
+  const recentRPEs = allSessions
+    .sort((a, b) => new Date(b.date) - new Date(a.date))
+    .slice(0, 8)
+    .flatMap(s => s.exercises?.flatMap(e => e.sets?.map(st => st.rpe).filter(Boolean) || []) || []);
+
+  const avgRPE = recentRPEs.length
+    ? recentRPEs.reduce((a, b) => a + b, 0) / recentRPEs.length
+    : null;
+
+  // Both energy decline AND elevated RPE required to avoid false positives
+  if (avgRPE === null || avgRPE < 8.0) return null;
+
+  return {
+    id: 'mid-block-deload',
+    type: REC_TYPES.DELOAD_SIGNAL,
+    severity: SEVERITY.URGENT,
+    exerciseId: null,
+    dayLabel: null,
+    title: 'Deload week recommended',
+    description: `You're in week ${program.currentWeek} of Block 3 and your post-session energy has been declining while RPE is trending high. After several weeks of structured loading, accumulated fatigue can mask your true fitness. Take a deload: same exercises, reduce sets by ~40%, drop RPE to 6–7 across all movements. Resume full training the following week — you'll likely feel stronger.`,
+    guideRule: 'Fatigue accumulation during extended loading blocks is expected. A well-timed deload removes the fatigue mask and often reveals fitness gains underneath.',
+    actionLabel: null,
+    actionType: null,
+    dataPoint: `Energy trend: ${priorAvg.toFixed(1)} → ${recentAvg.toFixed(1)} (last 6 rated sessions) · Avg RPE: ${avgRPE.toFixed(1)}`,
+    generatedAt: new Date().toISOString(),
+  };
+}
+
 // ─── Rule: Joint action volume ────────────────────────────────────────────────
 function checkJointActionVolume(program, allSessions, jointActionMetrics) {
   const recommendations = [];
   const seen = new Set();
+  const volumeThreshold = JOINT_ACTION_VOLUME_THRESHOLDS[program.trainingAge] || 8;
+  const recoveryThreshold = getRecoveryThreshold(program.age);
 
   for (const [jointAction, metrics] of Object.entries(jointActionMetrics)) {
     if (metrics.dataCount === 0) continue;
-    if (metrics.totalWeeklySets <= JOINT_ACTION_HIGH_VOLUME_THRESHOLD) continue;
+    if (metrics.totalWeeklySets <= volumeThreshold) continue;
     if (!metrics.isFullyStalling && metrics.stallingCount === 0) continue;
 
-    const recovery = detectInterSessionRecovery(jointAction, program, allSessions);
+    const recovery = detectInterSessionRecovery(jointAction, program, allSessions, recoveryThreshold);
     if (!recovery?.hasRecoveryIssue) continue;
 
     const programExercises = program.splitDays.flatMap(d => d.exercises);
@@ -352,7 +457,6 @@ function checkJointActionVolume(program, allSessions, jointActionMetrics) {
         const exConfig = programExercises.find(e => e.exerciseId === id);
         let sets = exConfig?.sets || 0;
         if (!sets) {
-          // Exercise not in current program — estimate from recent sessions
           const recent = allSessions
             .filter(s => s.exercises?.some(e => e.exerciseId === id))
             .sort((a, b) => new Date(b.date) - new Date(a.date))
@@ -402,6 +506,36 @@ function checkJointActionVolume(program, allSessions, jointActionMetrics) {
   return recommendations;
 }
 
+// ─── Rule: Push / pull balance ────────────────────────────────────────────────
+function checkPushPullBalance(jointActionMetrics) {
+  const pushSets = PUSH_JOINT_ACTIONS.reduce(
+    (sum, ja) => sum + (jointActionMetrics[ja]?.totalWeeklySets || 0), 0
+  );
+  const pullSets = PULL_JOINT_ACTIONS.reduce(
+    (sum, ja) => sum + (jointActionMetrics[ja]?.totalWeeklySets || 0), 0
+  );
+
+  if (pushSets === 0 || pullSets === 0) return null;
+
+  const ratio = pushSets / pullSets;
+  if (ratio <= 1.3) return null;
+
+  return {
+    id: 'push-pull-imbalance',
+    type: REC_TYPES.PUSH_PULL_IMBALANCE,
+    severity: SEVERITY.INFO,
+    exerciseId: null,
+    dayLabel: null,
+    title: 'Push volume exceeds pull volume',
+    description: `Your program has ${pushSets} push sets vs ${pullSets} pull sets per week (${ratio.toFixed(1)}:1 ratio). A sustained push-dominant imbalance increases shoulder impingement risk over time. Consider adding 1–2 sets of a rowing movement, or trimming a chest or shoulder set, to bring the ratio below 1.3:1.`,
+    guideRule: 'Maintain a balanced push-to-pull ratio to protect shoulder health and prevent postural imbalances.',
+    actionLabel: null,
+    actionType: null,
+    dataPoint: `Push: ${pushSets} sets · Pull: ${pullSets} sets · Ratio: ${ratio.toFixed(1)}:1`,
+    generatedAt: new Date().toISOString(),
+  };
+}
+
 // ─── Rule 2: Progress stalls ─────────────────────────────────────────────────
 const TRAINING_AGE_PROGRESS_CONTEXT = {
   [TRAINING_AGE.BEGINNER]:     'As a beginner, you should progress most sessions — a stall this early likely means a quick fix is needed.',
@@ -411,7 +545,7 @@ const TRAINING_AGE_PROGRESS_CONTEXT = {
 
 function checkProgressStalls(program, allSessions, checkIns, exerciseTrends, jointActionMetrics) {
   const recommendations = [];
-  const threshold = PLATEAU_THRESHOLDS[program.trainingAge] || 4;
+  const threshold = getPlateauThreshold(program.trainingAge, program.age);
   const progressContext = TRAINING_AGE_PROGRESS_CONTEXT[program.trainingAge] || '';
 
   const recentCheckIns = [...checkIns]
@@ -453,8 +587,14 @@ function checkProgressStalls(program, allSessions, checkIns, exerciseTrends, joi
       const lastE1RM  = getSessionE1RM(window[window.length - 1]);
       if (firstE1RM === 0 || lastE1RM === 0) continue;
 
-      const improvementPercent = ((lastE1RM - firstE1RM) / firstE1RM) * 100;
-      if (improvementPercent >= 2.5) continue;
+      const e1rmDelta = ((lastE1RM - firstE1RM) / firstE1RM) * 100;
+
+      // Check volume load as a secondary progression signal
+      const vlTrend = getVolumeLoadTrend(exerciseId, allSessions, threshold);
+
+      // Skip if EITHER e1RM improved meaningfully OR volume load improved meaningfully
+      if (e1rmDelta >= 2.5) continue;
+      if (vlTrend && vlTrend.deltaPercent >= 5) continue;
 
       // 1. Fatigue — suppress individual recs, global flag handles it
       if (fatigueIsIssue) continue;
@@ -512,7 +652,8 @@ function checkProgressStalls(program, allSessions, checkIns, exerciseTrends, joi
       // 4. Skip if joint action volume rule is already covering this
       const jointActionAlreadyFlagged = exDef.jointActions.some(ja => {
         const jaMetrics = jointActionMetrics[ja];
-        return jaMetrics?.totalWeeklySets > JOINT_ACTION_HIGH_VOLUME_THRESHOLD;
+        const volumeThreshold = JOINT_ACTION_VOLUME_THRESHOLDS[program.trainingAge] || 8;
+        return jaMetrics?.totalWeeklySets > volumeThreshold;
       });
       if (jointActionAlreadyFlagged) continue;
 
@@ -522,6 +663,10 @@ function checkProgressStalls(program, allSessions, checkIns, exerciseTrends, joi
       const avgDiscomfort = trendData?.avgDiscomfort ?? 0;
       const recoveringFine = avgRPE !== null && avgRPE <= 8.0 && avgDiscomfort <= 3;
 
+      const vlNote = vlTrend
+        ? ` Volume load: ${vlTrend.firstVL}kg-vol → ${vlTrend.lastVL}kg-vol.`
+        : '';
+
       if (recoveringFine) {
         recommendations.push({
           id: `volume-${exerciseId}`,
@@ -530,7 +675,7 @@ function checkProgressStalls(program, allSessions, checkIns, exerciseTrends, joi
           exerciseId,
           dayLabel: splitDay.dayLabel,
           title: `Add a set: ${exDef.name}`,
-          description: `${exDef.name} has stalled over ${threshold} sessions (e1RM: ${firstE1RM}kg → ${lastE1RM}kg), but your average RPE is ${avgRPE.toFixed(1)} and discomfort is low — your body is handling the current load comfortably without responding to it. The stimulus isn't enough. Try adding 1 set for 2–3 weeks. If progress resumes, keep it. If fatigue increases, remove the extra set. ${progressContext}`,
+          description: `${exDef.name} has stalled over ${threshold} sessions (e1RM: ${firstE1RM}kg → ${lastE1RM}kg; volume load flat too).${vlNote} Your average RPE is ${avgRPE.toFixed(1)} and discomfort is low — your body is handling the current load comfortably without responding to it. Try adding 1 set for 2–3 weeks. ${progressContext}`,
           guideRule: 'If you find a muscle group is always recovered but is lagging, then try out 1–2 more sets per week directed towards that muscle group until you can find the upper threshold.',
           actionLabel: null, actionType: null,
           dataPoint: `Avg RPE: ${avgRPE.toFixed(1)} · Avg discomfort: ${avgDiscomfort.toFixed(1)}/10 · e1RM flat over ${threshold} sessions`,
@@ -545,7 +690,7 @@ function checkProgressStalls(program, allSessions, checkIns, exerciseTrends, joi
           exerciseId,
           dayLabel: splitDay.dayLabel,
           title: `Reduce intensity: ${exDef.name}`,
-          description: `${exDef.name} has stalled over ${threshold} sessions (e1RM: ${firstE1RM}kg → ${lastE1RM}kg)${rpeNote}. Fatigue may be limiting recovery. Try reducing your RPE target by 1 point for a few sessions to allow fuller recovery between workouts. ${progressContext}`,
+          description: `${exDef.name} has stalled over ${threshold} sessions (e1RM: ${firstE1RM}kg → ${lastE1RM}kg)${rpeNote}.${vlNote} Fatigue may be limiting recovery. Try reducing your RPE target by 1 point for a few sessions to allow fuller recovery between workouts. ${progressContext}`,
           guideRule: 'For highly fatiguing lifts that stall in progression, adjust the RPEs lower. This will help us recover better and prevent fatigue bleeding into later lifts.',
           actionLabel: null, actionType: null,
           dataPoint: avgRPE !== null
@@ -610,7 +755,7 @@ function checkRPEAdjustments(program, allSessions) {
 // ─── Rule 5: Exercise order ───────────────────────────────────────────────────
 function checkExerciseOrderOptimization(program, exerciseTrends) {
   const recommendations = [];
-  const threshold = PLATEAU_THRESHOLDS[program.trainingAge] || 4;
+  const threshold = getPlateauThreshold(program.trainingAge, program.age);
 
   for (const splitDay of program.splitDays) {
     const dayExercises = splitDay.exercises;
@@ -683,6 +828,7 @@ function buildTrendEntry(exerciseId, exDef, dayLabel, displayName, allSessions) 
     return {
       exerciseId, exerciseName: exDef.name, dayLabel, displayName,
       sessionsLogged: 0, firstE1RM: 0, lastE1RM: 0, deltaPercent: 0,
+      volumeLoadDelta: 0,
       trend: 'no_data', avgDiscomfort: 0, discomfortFlag: false, lastDate: null,
     };
   }
@@ -701,6 +847,10 @@ function buildTrendEntry(exerciseId, exDef, dayLabel, displayName, allSessions) 
   const lastE1RM     = getE1RM(exerciseSessions[exerciseSessions.length - 1]);
   const deltaPercent = firstE1RM > 0 ? ((lastE1RM - firstE1RM) / firstE1RM) * 100 : 0;
 
+  // Volume load trend as secondary signal
+  const vlTrend = getVolumeLoadTrend(exerciseId, allSessions, exerciseSessions.length);
+  const volumeLoadDelta = vlTrend?.deltaPercent ?? 0;
+
   const discomfortRatings = exerciseSessions.slice(-3)
     .map(s => s.exercises.find(e => e.exerciseId === exerciseId)?.discomfortRating)
     .filter(Boolean);
@@ -709,10 +859,10 @@ function buildTrendEntry(exerciseId, exDef, dayLabel, displayName, allSessions) 
     : 0;
 
   let trend;
-  if (exerciseSessions.length < 2) trend = 'no_data';
-  else if (deltaPercent >= 5)      trend = 'progressing';
-  else if (deltaPercent >= -2)     trend = 'plateau';
-  else                             trend = 'declining';
+  if (exerciseSessions.length < 2)                         trend = 'no_data';
+  else if (deltaPercent >= 5 || volumeLoadDelta >= 5)      trend = 'progressing';
+  else if (deltaPercent >= -2 && volumeLoadDelta >= -5)    trend = 'plateau';
+  else                                                      trend = 'declining';
 
   return {
     exerciseId,
@@ -722,6 +872,7 @@ function buildTrendEntry(exerciseId, exDef, dayLabel, displayName, allSessions) 
     sessionsLogged: exerciseSessions.length,
     firstE1RM, lastE1RM,
     deltaPercent: Math.round(deltaPercent * 10) / 10,
+    volumeLoadDelta: Math.round(volumeLoadDelta * 10) / 10,
     trend,
     avgDiscomfort: Math.round(avgDiscomfort * 10) / 10,
     discomfortFlag: avgDiscomfort >= 7,
@@ -733,7 +884,6 @@ async function calculateExerciseTrends(program, allSessions) {
   const trends = [];
   const seen   = new Set();
 
-  // First pass: exercises formally in the program (we have their dayLabel)
   for (const splitDay of program.splitDays) {
     for (const exConfig of splitDay.exercises) {
       const exDef = findExercise(exConfig.exerciseId);
@@ -747,8 +897,6 @@ async function calculateExerciseTrends(program, allSessions) {
     }
   }
 
-  // Second pass: exercises in sessions but not in the current program
-  // (custom exercises added ad-hoc, or exercises swapped out since they were logged)
   for (const session of allSessions) {
     for (const exData of (session.exercises || [])) {
       const exerciseId = exData.exerciseId;
@@ -756,7 +904,6 @@ async function calculateExerciseTrends(program, allSessions) {
       const exDef = findExercise(exerciseId);
       if (!exDef) continue;
       seen.add(exerciseId);
-      // Use the most recent session's day as context
       const recentSession = allSessions
         .filter(s => s.exercises?.some(e => e.exerciseId === exerciseId))
         .sort((a, b) => new Date(b.date) - new Date(a.date))[0];
@@ -795,6 +942,12 @@ export async function runAdjustmentEngine() {
   const exerciseTrends     = await calculateExerciseTrends(program, allSessions);
   const jointActionMetrics = calculateJointActionMetrics(program, exerciseTrends, allSessions);
 
+  // Mid-Block 3 deload check — runs in block 3 from week 8+
+  if (program.currentBlock === 3 && program.currentWeek >= 8) {
+    const deloadRec = checkMidBlockFatigue(program, allSessions);
+    if (deloadRec) recommendations.push(deloadRec);
+  }
+
   if (isOptimizationBlock) {
     const fatigueRec = checkFatigueFlag(allSessions);
     if (fatigueRec) recommendations.push(fatigueRec);
@@ -808,6 +961,11 @@ export async function runAdjustmentEngine() {
     recommendations.push(...checkProgressStalls(program, allSessions, checkIns, exerciseTrends, jointActionMetrics));
     recommendations.push(...checkRPEAdjustments(program, allSessions));
     recommendations.push(...checkExerciseOrderOptimization(program, exerciseTrends));
+
+    if (allSessions.length >= 3) {
+      const pushPullRec = checkPushPullBalance(jointActionMetrics);
+      if (pushPullRec) recommendations.push(pushPullRec);
+    }
   }
 
   // Deduplicate: one rec per type+exercise combination

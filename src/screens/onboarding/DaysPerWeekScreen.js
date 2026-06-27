@@ -21,7 +21,7 @@ export default function DaysPerWeekScreen({ navigation, route }) {
   return (
     <OnboardingLayout
       currentStep={2}
-      totalSteps={3}
+      totalSteps={4}
       onBack={() => navigation.goBack()}
     >
       <Text style={styles.question}>How many days per week can you commit to training?</Text>

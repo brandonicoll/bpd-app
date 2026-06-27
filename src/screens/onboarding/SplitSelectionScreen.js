@@ -27,7 +27,7 @@ export default function SplitSelectionScreen({ navigation, route }) {
   return (
     <OnboardingLayout
       currentStep={3}
-      totalSteps={3}
+      totalSteps={4}
       onBack={() => navigation.goBack()}
     >
       <Text style={styles.question}>Choose your split</Text>
@@ -68,7 +68,7 @@ export default function SplitSelectionScreen({ navigation, route }) {
         title="Build my program"
         disabled={!selected}
         onPress={() =>
-          navigation.navigate('OnboardingComplete', {
+          navigation.navigate('Age', {
             trainingAge,
             daysPerWeek,
             splitType: selected,

@@ -30,7 +30,7 @@ export default function TrainingAgeScreen({ navigation }) {
   return (
     <OnboardingLayout
       currentStep={1}
-      totalSteps={3}
+      totalSteps={4}
       onBack={() => navigation.goBack()}
     >
       <Text style={styles.question}>How long have you been training seriously?</Text>

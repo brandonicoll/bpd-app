@@ -211,7 +211,7 @@ const SPLIT_DAY_ORDER = {
 };
 
 export function buildDefaultProgram(profile) {
-  const { trainingAge, daysPerWeek, splitType } = profile;
+  const { trainingAge, daysPerWeek, splitType, age } = profile;
 
   const dayOrder = SPLIT_DAY_ORDER[splitType];
   if (!dayOrder) throw new Error(`Unknown splitType: ${splitType}`);
@@ -237,6 +237,7 @@ export function buildDefaultProgram(profile) {
     currentBlock: 1,
     currentWeek: 1,
     mesocycle: 1,
+    age: age || null,
     splitDays,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),

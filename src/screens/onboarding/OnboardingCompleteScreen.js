@@ -9,17 +9,17 @@ import { saveUserProfile, saveCurrentProgram } from '../../services/storage';
 import { TRAINING_AGE_LABELS } from '../../data/splits';
 
 export default function OnboardingCompleteScreen({ route }) {
-  const { trainingAge, daysPerWeek, splitType } = route.params;
+  const { trainingAge, daysPerWeek, splitType, age } = route.params;
   const { completeOnboarding } = useApp();
   const [saving, setSaving] = useState(false);
 
-  const program = buildDefaultProgram({ trainingAge, daysPerWeek, splitType });
+  const program = buildDefaultProgram({ trainingAge, daysPerWeek, splitType, age });
   const block = getCurrentBlockInfo(1);
 
   async function handleStart() {
     setSaving(true);
     try {
-      await saveUserProfile({ trainingAge, daysPerWeek, splitType, createdAt: new Date().toISOString() });
+      await saveUserProfile({ trainingAge, daysPerWeek, splitType, age, createdAt: new Date().toISOString() });
       await saveCurrentProgram(program);
       await completeOnboarding(program);
     } catch (e) {
@@ -30,6 +30,7 @@ export default function OnboardingCompleteScreen({ route }) {
 
   const summaryItems = [
     { label: 'Training age', value: TRAINING_AGE_LABELS[trainingAge] },
+    { label: 'Age', value: `${age} years old` },
     { label: 'Days per week', value: `${daysPerWeek} days` },
     { label: 'Split', value: splitType.replace(/_/g, ' / ').replace(/\b\w/g, l => l.toUpperCase()) },
     { label: 'Starting block', value: `Block 1 — ${block.name}` },
