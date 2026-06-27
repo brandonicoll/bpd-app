@@ -10,14 +10,14 @@ import { useTheme } from '../../theme/ThemeContext';
 import {
   getCurrentProgram, swapExerciseInProgram, getCustomExercises,
   addExerciseToProgram, removeExerciseFromProgram, setExerciseOrderForDay,
-  renameProgramDay, reorderSplitDays,
+  renameProgramDay, reorderSplitDays, updateExerciseInProgram, saveExerciseOverride,
 } from '../../services/storage';
 import { getCurrentBlockInfo } from '../../services/programEngine';
 import { exercises as exerciseLibrary, getSwapCandidates } from '../../data/exercises';
 import { JOINT_ACTION_LABELS } from '../../data/jointActionLabels';
 import CustomExerciseModal from '../../components/common/CustomExerciseModal';
 import ChangeSplitModal from '../../components/program/ChangeSplitModal';
-import DraggableFlatList, { NestableDraggableFlatList, NestableScrollContainer, ScaleDecorator } from 'react-native-draggable-flatlist';
+import DraggableFlatList, { ScaleDecorator } from 'react-native-draggable-flatlist';
 
 function getExercise(id) {
   return exerciseLibrary.find(e => e.id === id);
@@ -591,6 +591,161 @@ const makeReorderStyles = (colors) => StyleSheet.create({
   exerciseCount: { fontSize: fontSizes.xs, color: colors.textTertiary, fontWeight: '500' },
 });
 
+// ─── Edit exercise config modal ───────────────────────────────────────────────
+function EditExerciseConfigModal({ visible, ex, exConfig, dayLabel, onClose, onSaved }) {
+  const { colors } = useTheme();
+  const s = makeEditConfigStyles(colors);
+  const [sets, setSets] = useState('3');
+  const [repMin, setRepMin] = useState('8');
+  const [repMax, setRepMax] = useState('12');
+  const [rpe, setRpe] = useState(8);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (visible && exConfig) {
+      setSets(String(exConfig.sets || 3));
+      setRepMin(String(exConfig.repRange?.[0] ?? 8));
+      setRepMax(String(exConfig.repRange?.[1] ?? 12));
+      setRpe(exConfig.rpe ?? 8);
+    }
+  }, [visible, exConfig]);
+
+  async function handleSave() {
+    const setsNum = Math.max(1, parseInt(sets) || 1);
+    const min = parseInt(repMin) || 1;
+    const max = parseInt(repMax) || 1;
+    if (min >= max) {
+      Alert.alert('Invalid rep range', 'Min reps must be less than max reps.');
+      return;
+    }
+    setSaving(true);
+    try {
+      await updateExerciseInProgram(dayLabel, exConfig.exerciseId, { sets: setsNum, repRange: [min, max], rpe });
+      await saveExerciseOverride(exConfig.exerciseId, { defaultRepRange: [min, max], defaultRPE: rpe });
+      onSaved();
+    } catch (e) {
+      Alert.alert('Error', 'Could not save. Please try again.');
+      setSaving(false);
+    }
+  }
+
+  const ecs = makeEditConfigStyles(colors);
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <TouchableOpacity style={ecs.overlay} onPress={onClose} activeOpacity={1} />
+      <View style={ecs.sheet}>
+        <View style={ecs.handle} />
+        <Text style={ecs.title}>{ex?.name}</Text>
+        <Text style={ecs.subtitle}>Sets, rep range & RPE target</Text>
+
+        <Text style={ecs.label}>Sets</Text>
+        <View style={ecs.setsRow}>
+          <TouchableOpacity onPress={() => setSets(v => String(Math.max(1, (parseInt(v)||1) - 1)))} style={ecs.stepper} activeOpacity={0.7}>
+            <Ionicons name="remove" size={22} color={colors.text} />
+          </TouchableOpacity>
+          <Text style={ecs.setsValue}>{sets}</Text>
+          <TouchableOpacity onPress={() => setSets(v => String(Math.min(10, (parseInt(v)||1) + 1)))} style={ecs.stepper} activeOpacity={0.7}>
+            <Ionicons name="add" size={22} color={colors.text} />
+          </TouchableOpacity>
+        </View>
+
+        <Text style={ecs.label}>Rep range</Text>
+        <View style={ecs.repRow}>
+          <View style={ecs.repGroup}>
+            <Text style={ecs.repGroupLabel}>Min</Text>
+            <TextInput style={ecs.repInput} value={repMin} onChangeText={setRepMin} keyboardType="number-pad" maxLength={2} />
+          </View>
+          <Text style={ecs.repDash}>–</Text>
+          <View style={ecs.repGroup}>
+            <Text style={ecs.repGroupLabel}>Max</Text>
+            <TextInput style={ecs.repInput} value={repMax} onChangeText={setRepMax} keyboardType="number-pad" maxLength={2} />
+          </View>
+        </View>
+
+        <Text style={ecs.label}>Target RPE</Text>
+        <View style={ecs.rpeRow}>
+          {[6,7,8,9,10].map(val => (
+            <TouchableOpacity key={val} onPress={() => setRpe(val)} activeOpacity={0.7}
+              style={[ecs.rpeChip, rpe === val && ecs.rpeChipSelected]}>
+              <Text style={[ecs.rpeChipText, rpe === val && ecs.rpeChipTextSelected]}>{val}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        <Text style={ecs.note}>Rep range and RPE also update this exercise's defaults in the library.</Text>
+
+        <View style={ecs.footer}>
+          <TouchableOpacity onPress={onClose} style={ecs.cancelBtn} activeOpacity={0.7}>
+            <Text style={ecs.cancelText}>Cancel</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={handleSave} disabled={saving} activeOpacity={0.8}
+            style={[ecs.saveBtn, saving && ecs.saveBtnDisabled]}>
+            {saving ? <ActivityIndicator color="#fff" size="small" /> : <Text style={ecs.saveText}>Save</Text>}
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+const makeEditConfigStyles = (colors) => StyleSheet.create({
+  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.4)' },
+  sheet: {
+    position: 'absolute', bottom: 0, left: 0, right: 0,
+    backgroundColor: colors.background,
+    borderTopLeftRadius: 20, borderTopRightRadius: 20,
+    padding: spacing.lg, paddingBottom: 40,
+  },
+  handle: { width: 36, height: 4, borderRadius: 2, backgroundColor: colors.border, alignSelf: 'center', marginBottom: spacing.md },
+  title: { fontSize: fontSizes.lg, fontWeight: '700', color: colors.text, marginBottom: 2 },
+  subtitle: { fontSize: fontSizes.sm, color: colors.textSecondary, marginBottom: spacing.md },
+  label: {
+    fontSize: fontSizes.xs, fontWeight: '600', color: colors.textTertiary,
+    textTransform: 'uppercase', letterSpacing: 0.8,
+    marginBottom: spacing.sm, marginTop: spacing.md,
+  },
+  setsRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg },
+  stepper: {
+    width: 44, height: 44, borderRadius: borderRadius.md,
+    borderWidth: 1, borderColor: colors.border,
+    backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center',
+  },
+  setsValue: { fontSize: fontSizes.xxl, fontWeight: '700', color: colors.text, minWidth: 40, textAlign: 'center' },
+  repRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  repGroup: { flex: 1 },
+  repGroupLabel: { fontSize: fontSizes.xs, color: colors.textTertiary, marginBottom: 4 },
+  repInput: {
+    backgroundColor: colors.surface, borderRadius: borderRadius.md,
+    borderWidth: 1, borderColor: colors.border,
+    paddingHorizontal: spacing.md, height: 48,
+    fontSize: fontSizes.xl, fontWeight: '700', color: colors.text, textAlign: 'center',
+  },
+  repDash: { fontSize: fontSizes.xl, color: colors.textTertiary, marginTop: 20 },
+  rpeRow: { flexDirection: 'row', gap: spacing.sm },
+  rpeChip: {
+    flex: 1, height: 44, borderRadius: borderRadius.md, borderWidth: 1.5,
+    borderColor: colors.border, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: colors.surface,
+  },
+  rpeChipSelected: { borderColor: colors.primary, backgroundColor: colors.primaryLight },
+  rpeChipText: { fontSize: fontSizes.md, fontWeight: '600', color: colors.textSecondary },
+  rpeChipTextSelected: { color: colors.primary },
+  note: { fontSize: fontSizes.xs, color: colors.textTertiary, marginTop: spacing.md, lineHeight: 18 },
+  footer: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.lg },
+  cancelBtn: {
+    flex: 1, height: 50, borderRadius: borderRadius.md,
+    borderWidth: 1, borderColor: colors.border,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  cancelText: { fontSize: fontSizes.sm, fontWeight: '600', color: colors.textSecondary },
+  saveBtn: {
+    flex: 2, height: 50, borderRadius: borderRadius.md,
+    backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center',
+  },
+  saveBtnDisabled: { opacity: 0.4 },
+  saveText: { fontSize: fontSizes.sm, fontWeight: '700', color: '#fff' },
+});
+
 // ─── ProgramOverviewScreen ────────────────────────────────────────────────────
 export default function ProgramOverviewScreen({ navigation }) {
   const { colors } = useTheme();
@@ -611,8 +766,7 @@ export default function ProgramOverviewScreen({ navigation }) {
   const [showChangeSplit, setShowChangeSplit] = useState(false);
   const [showReorderDays, setShowReorderDays] = useState(false);
   const [showCreateCustom, setShowCreateCustom] = useState(false);
-  const [showEditCustom, setShowEditCustom] = useState(false);
-  const [editingCustomExercise, setEditingCustomExercise] = useState(null);
+  const [editConfigModal, setEditConfigModal] = useState({ visible: false, dayLabel: null, exConfig: null, ex: null });
   const createCustomContext = useRef(null);
 
   // iOS only supports one Modal at a time. Close the sub-modal first,
@@ -702,6 +856,15 @@ export default function ProgramOverviewScreen({ navigation }) {
     load();
   }
 
+  async function handleMoveExercise(dayLabel, exercises, fromIndex, direction) {
+    const toIndex = direction === 'up' ? fromIndex - 1 : fromIndex + 1;
+    if (toIndex < 0 || toIndex >= exercises.length) return;
+    const newOrder = [...exercises];
+    [newOrder[fromIndex], newOrder[toIndex]] = [newOrder[toIndex], newOrder[fromIndex]];
+    await setExerciseOrderForDay(dayLabel, newOrder);
+    load();
+  }
+
   function handleDeleteExercise(dayLabel, exerciseId, count) {
     if (count <= 1) {
       Alert.alert('Cannot remove', 'Each day must have at least one exercise.');
@@ -736,7 +899,7 @@ export default function ProgramOverviewScreen({ navigation }) {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <NestableScrollContainer
+      <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
@@ -778,7 +941,7 @@ export default function ProgramOverviewScreen({ navigation }) {
               </View>
               <View style={[styles.weekBadge, { backgroundColor: blockInfo.color + '20' }]}>
                 <Text style={[styles.weekBadgeText, { color: blockInfo.color }]}>
-                  Week {program.currentWeek}
+                  {(program.mesocycle || 1) > 1 ? `C${program.mesocycle} · ` : ''}Wk {program.currentWeek}
                 </Text>
               </View>
             </View>
@@ -867,81 +1030,72 @@ export default function ProgramOverviewScreen({ navigation }) {
               </View>
 
               {/* Exercise rows */}
-              <NestableDraggableFlatList
-                data={day.exercises}
-                keyExtractor={(item, i) => `${item.exerciseId}-${i}`}
-                onDragEnd={({ data }) => handleReorderDay(day.dayLabel, data)}
-                scrollEnabled={false}
-                renderItem={({ item: exConfig, drag, isActive, getIndex }) => {
-                  const ex = getExercise(exConfig.exerciseId);
-                  if (!ex) return null;
-                  const exIndex = getIndex() ?? 0;
-                  const isFirst = exIndex === 0;
-                  return (
-                    <ScaleDecorator>
-                      <View style={[styles.exRow, isActive && styles.exRowActive]}>
-                        <TouchableOpacity
-                          style={styles.exInfo}
-                          activeOpacity={0.7}
-                          onPress={() => navigation.navigate('ExerciseDetail', {
-                            exerciseId: exConfig.exerciseId,
-                            dayLabel: day.dayLabel,
-                          })}
-                        >
-                          <View style={[styles.exIndexDot, isFirst && styles.exIndexDotFirst]} />
-                          <View style={styles.exTextGroup}>
-                            <Text style={styles.exName}>{ex.name}</Text>
-                            <Text style={styles.exMeta}>
-                              {exConfig.sets} × {exConfig.repRange[0]}–{exConfig.repRange[1]} reps · RPE {exConfig.rpe}
-                            </Text>
-                          </View>
-                        </TouchableOpacity>
-
-                        {isEditing ? (
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-                            {ex.isCustom && (
-                              <TouchableOpacity
-                                onPress={() => {
-                                  setEditingCustomExercise(ex);
-                                  setShowEditCustom(true);
-                                }}
-                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                              >
-                                <Ionicons name="pencil-outline" size={18} color={colors.primary} />
-                              </TouchableOpacity>
-                            )}
-                            <TouchableOpacity
-                              onPress={() => handleDeleteExercise(day.dayLabel, exConfig.exerciseId, day.exercises.length)}
-                              style={styles.deleteBtn}
-                              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                            >
-                              <Ionicons name="trash-outline" size={18} color="#E53E3E" />
-                            </TouchableOpacity>
-                          </View>
-                        ) : (
-                          <>
-                            <TouchableOpacity
-                              onLongPress={drag}
-                              delayLongPress={150}
-                              style={styles.dragHandle}
-                              hitSlop={{ top: 8, bottom: 8, left: 8, right: 4 }}
-                            >
-                              <Ionicons name="reorder-three-outline" size={20} color={colors.textTertiary} />
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                              onPress={() => openSwap(exConfig.exerciseId, day.dayLabel)}
-                              style={styles.swapBtn}
-                              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                            >
-                              <Ionicons name="swap-horizontal" size={18} color={colors.textSecondary} />
-                            </TouchableOpacity>
-                          </>
-                        )}
+              {day.exercises.map((exConfig, exIndex) => {
+                const ex = getExercise(exConfig.exerciseId);
+                if (!ex) return null;
+                return (
+                  <View key={`${exConfig.exerciseId}-${exIndex}`} style={styles.exRow}>
+                    <TouchableOpacity
+                      style={styles.exInfo}
+                      activeOpacity={0.7}
+                      onPress={() => navigation.navigate('ExerciseDetail', {
+                        exerciseId: exConfig.exerciseId,
+                        dayLabel: day.dayLabel,
+                      })}
+                    >
+                      <View style={[styles.exIndexDot, exIndex === 0 && styles.exIndexDotFirst]} />
+                      <View style={styles.exTextGroup}>
+                        <Text style={styles.exName}>{ex.name}</Text>
+                        <Text style={styles.exMeta}>
+                          {exConfig.sets} × {exConfig.repRange[0]}–{exConfig.repRange[1]} reps · RPE {exConfig.rpe}
+                        </Text>
                       </View>
-                    </ScaleDecorator>
-                  );
-                }}
-              />
+                    </TouchableOpacity>
+
+                    {isEditing ? (
+                      <View style={styles.exActions}>
+                        <TouchableOpacity
+                          onPress={() => handleMoveExercise(day.dayLabel, day.exercises, exIndex, 'up')}
+                          disabled={exIndex === 0}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                          <Ionicons name="chevron-up" size={20} color={exIndex === 0 ? colors.border : colors.textSecondary} />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={() => handleMoveExercise(day.dayLabel, day.exercises, exIndex, 'down')}
+                          disabled={exIndex === day.exercises.length - 1}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                          <Ionicons name="chevron-down" size={20} color={exIndex === day.exercises.length - 1 ? colors.border : colors.textSecondary} />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={() => handleDeleteExercise(day.dayLabel, exConfig.exerciseId, day.exercises.length)}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                          <Ionicons name="trash-outline" size={18} color="#E53E3E" />
+                        </TouchableOpacity>
+                      </View>
+                    ) : (
+                      <View style={styles.exActions}>
+                        <TouchableOpacity
+                          onPress={() => setEditConfigModal({ visible: true, dayLabel: day.dayLabel, exConfig, ex })}
+                          style={styles.configBtn}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                          <Ionicons name="options-outline" size={18} color={colors.textSecondary} />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={() => openSwap(exConfig.exerciseId, day.dayLabel)}
+                          style={styles.swapBtn}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                          <Ionicons name="swap-horizontal" size={18} color={colors.textSecondary} />
+                        </TouchableOpacity>
+                      </View>
+                    )}
+                  </View>
+                );
+              })}
 
               {/* Add exercise row — edit mode only */}
               {isEditing && (
@@ -967,7 +1121,7 @@ export default function ProgramOverviewScreen({ navigation }) {
           <Text style={styles.libraryLinkText}>Browse full exercise library</Text>
           <Ionicons name="chevron-forward" size={16} color={colors.primary} />
         </TouchableOpacity>
-      </NestableScrollContainer>
+      </ScrollView>
 
       {/* Swap modal */}
       <SwapModal
@@ -1010,12 +1164,17 @@ export default function ProgramOverviewScreen({ navigation }) {
         onSaved={handleCustomExerciseSaved}
       />
 
-      {/* Custom exercise editor */}
-      <CustomExerciseModal
-        visible={showEditCustom}
-        editExercise={editingCustomExercise}
-        onClose={() => { setShowEditCustom(false); setEditingCustomExercise(null); }}
-        onSaved={() => { setShowEditCustom(false); setEditingCustomExercise(null); load(); }}
+      {/* Edit exercise config (sets/reps/RPE) */}
+      <EditExerciseConfigModal
+        visible={editConfigModal.visible}
+        ex={editConfigModal.ex}
+        exConfig={editConfigModal.exConfig}
+        dayLabel={editConfigModal.dayLabel}
+        onClose={() => setEditConfigModal({ visible: false, dayLabel: null, exConfig: null, ex: null })}
+        onSaved={() => {
+          setEditConfigModal({ visible: false, dayLabel: null, exConfig: null, ex: null });
+          load();
+        }}
       />
 
       {/* Reorder split days modal */}
@@ -1192,21 +1351,17 @@ const makeStyles = (colors) => StyleSheet.create({
     backgroundColor: colors.primary,
   },
   exRowActive: { opacity: 0.95, shadowOpacity: 0.12, elevation: 4 },
-  dragHandle: {
-    paddingHorizontal: spacing.xs,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+  exActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   exTextGroup: { flex: 1 },
   exName: { fontSize: fontSizes.sm, fontWeight: '600', color: colors.text },
   exMeta: { fontSize: fontSizes.xs, color: colors.textSecondary, marginTop: 1 },
+  configBtn: {
+    paddingHorizontal: spacing.xs,
+    paddingVertical: 4,
+  },
   swapBtn: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 6,
-    borderRadius: borderRadius.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginLeft: spacing.sm,
+    paddingHorizontal: spacing.xs,
+    paddingVertical: 4,
   },
   swapIcon: { fontSize: 14, color: colors.textSecondary, fontWeight: '700' },
   editDayBtn: {

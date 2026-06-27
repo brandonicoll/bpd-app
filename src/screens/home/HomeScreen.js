@@ -95,7 +95,11 @@ export default function HomeScreen({ navigation }) {
           </View>
           <View style={styles.headerRight}>
             <View style={styles.weekBadge}>
-              <Text style={styles.weekBadgeText}>Week {program.currentWeek} of 12</Text>
+              <Text style={styles.weekBadgeText}>
+                {(program.mesocycle || 1) > 1
+                  ? `Cycle ${program.mesocycle} · Wk ${program.currentWeek}`
+                  : `Week ${program.currentWeek} of 12`}
+              </Text>
             </View>
             <TouchableOpacity onPress={() => navigation.navigate('Settings')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
               <Ionicons name="settings-outline" size={20} color={colors.textSecondary} />

@@ -142,6 +142,18 @@ export default function InsightsScreen({ navigation }) {
 
   return (
     <SafeAreaView style={styles.safe}>
+      <View style={styles.titleRow}>
+        <Text style={styles.screenTitle}>Insights</Text>
+        <TouchableOpacity
+          onPress={() => navigation.navigate('ProgressPhotos')}
+          style={styles.photosBtn}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="camera-outline" size={15} color={colors.primary} />
+          <Text style={styles.photosBtnText}>Photos</Text>
+        </TouchableOpacity>
+      </View>
+
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.content}
@@ -150,13 +162,16 @@ export default function InsightsScreen({ navigation }) {
           <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />
         }
       >
-        <Text style={styles.screenTitle}>Insights</Text>
 
         {/* Block status */}
         <View style={[styles.blockCard, { borderLeftColor: blockInfo.color }]}>
           <View style={styles.blockCardRow}>
             <View>
-              <Text style={styles.blockMeta}>Block {blockInfo.blockNumber} · Week {program.currentWeek} of 12</Text>
+              <Text style={styles.blockMeta}>
+                Block {blockInfo.blockNumber} · {(program.mesocycle || 1) > 1
+                  ? `Cycle ${program.mesocycle} · Wk ${program.currentWeek}`
+                  : `Week ${program.currentWeek} of 12`}
+              </Text>
               <Text style={styles.blockName}>{blockInfo.name}</Text>
             </View>
             <View style={[styles.blockBadge, { backgroundColor: blockInfo.color + '22' }]}>
@@ -167,14 +182,21 @@ export default function InsightsScreen({ navigation }) {
               />
               <Text style={[styles.blockBadgeText, { color: blockInfo.color }]}>
                 {isOptimizationBlock
-                  ? '  Open'
-                  : `  Wk ${weeksUntilBlock4 > 0 ? weeksUntilBlock4 + ' left' : '11'}`}
+                  ? '  Tweaks unlocked'
+                  : weeksUntilBlock4 > 0
+                    ? `  ${weeksUntilBlock4} wk${weeksUntilBlock4 !== 1 ? 's' : ''} to unlock`
+                    : '  Locked'}
               </Text>
             </View>
           </View>
           {!isOptimizationBlock && (
             <Text style={styles.blockHint}>
               Full recommendations unlock at week 11. The engine is tracking your data silently — don't change anything until then.
+            </Text>
+          )}
+          {isOptimizationBlock && (
+            <Text style={styles.blockHint}>
+              You're in the optimization window. The engine can now suggest small, data-driven tweaks to your program.
             </Text>
           )}
         </View>
@@ -351,7 +373,14 @@ const makeStyles = (colors) => StyleSheet.create({
   content: { padding: spacing.lg, paddingBottom: spacing.xxl },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   emptyText: { fontSize: fontSizes.sm, color: colors.textSecondary },
-  screenTitle: { fontSize: fontSizes.xxl, fontWeight: '700', color: colors.text, marginBottom: spacing.md },
+  titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.lg, paddingTop: spacing.md, marginBottom: spacing.md },
+  screenTitle: { fontSize: fontSizes.xxl, fontWeight: '700', color: colors.text },
+  photosBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    backgroundColor: colors.primaryLight, borderRadius: borderRadius.full,
+    paddingHorizontal: 12, paddingVertical: 7,
+  },
+  photosBtnText: { fontSize: fontSizes.xs, fontWeight: '700', color: colors.primary },
 
   blockCard: {
     backgroundColor: colors.surface,
