@@ -67,16 +67,28 @@ async function getAllPhotosRaw() {
   return raw ? JSON.parse(raw) : [];
 }
 
+// iOS app UUID in the documentDirectory path can change across builds/reinstalls.
+// Rebase stored URIs to the current documentDirectory so photos remain accessible.
+function rebaseUri(storedUri) {
+  if (!storedUri) return storedUri;
+  const marker = 'progress_photos/';
+  const idx = storedUri.indexOf(marker);
+  if (idx === -1) return storedUri;
+  return FileSystem.documentDirectory + storedUri.slice(idx);
+}
+
 export async function getProgressPhotos() {
   const photos = await getAllPhotosRaw();
-  return photos.sort((a, b) => new Date(b.date) - new Date(a.date));
+  return photos
+    .sort((a, b) => new Date(b.date) - new Date(a.date))
+    .map(p => ({ ...p, imageUri: rebaseUri(p.imageUri) }));
 }
 
 export async function deleteProgressPhoto(id) {
   const all = await getAllPhotosRaw();
   const photo = all.find(p => p.id === id);
   if (photo?.imageUri) {
-    try { await FileSystem.deleteAsync(photo.imageUri, { idempotent: true }); } catch {}
+    try { await FileSystem.deleteAsync(rebaseUri(photo.imageUri), { idempotent: true }); } catch {}
   }
   const remaining = all.filter(p => p.id !== id);
   await AsyncStorage.setItem(PHOTOS_KEY, JSON.stringify(remaining));
