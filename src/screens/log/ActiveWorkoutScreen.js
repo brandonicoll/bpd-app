@@ -9,13 +9,12 @@ import 'react-native-get-random-values';
 import { v4 as uuidv4 } from 'uuid';
 import { spacing, fontSizes, borderRadius } from '../../theme';
 import { useTheme } from '../../theme/ThemeContext';
+import { useWeightUnit } from '../../context/WeightUnitContext';
 import {
   saveSession,
   maybeAdvanceProgramWeek,
   getLastSessionForExercise,
   updateStreak,
-  getWeightUnit,
-  saveWeightUnit,
   saveDraftSession,
   clearDraftSession,
   getCustomExercises,
@@ -434,7 +433,7 @@ export default function ActiveWorkoutScreen({ navigation, route }) {
   const [restStartedAt, setRestStartedAt] = useState(Date.now());
   const [restElapsed, setRestElapsed] = useState(0);
 
-  const [weightUnit, setWeightUnitState] = useState(draftData?.weightUnit || 'lbs');
+  const { weightUnit, setWeightUnit } = useWeightUnit();
   const [previousData, setPreviousData] = useState({});
   const [finishing, setFinishing] = useState(false);
   const [pickerMode, setPickerMode] = useState(null); // null | 'add' | { mode: 'swap', index: number }
@@ -466,8 +465,7 @@ export default function ActiveWorkoutScreen({ navigation, route }) {
 
   useEffect(() => {
     async function load() {
-      const [unit, custom] = await Promise.all([getWeightUnit(), getCustomExercises()]);
-      if (!draftData?.weightUnit) setWeightUnitState(unit);
+      const custom = await getCustomExercises();
       setCustomExercises(custom);
       await loadPreviousData(splitDay.exercises.map(e => e.exerciseId));
     }
@@ -514,9 +512,7 @@ export default function ActiveWorkoutScreen({ navigation, route }) {
   }, [sessionExercises, weightUnit]);
 
   async function toggleWeightUnit() {
-    const newUnit = weightUnit === 'lbs' ? 'kg' : 'lbs';
-    setWeightUnitState(newUnit);
-    await saveWeightUnit(newUnit);
+    await setWeightUnit(weightUnit === 'lbs' ? 'kg' : 'lbs');
   }
 
   function updateSet(exerciseIndex, setIndex, field, value) {
@@ -820,6 +816,7 @@ export default function ActiveWorkoutScreen({ navigation, route }) {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
+          automaticallyAdjustKeyboardInsets={true}
         >
           {sessionExercises.map((exData, exIndex) => {
             const exDef = allExercises.find(e => e.id === exData.exerciseId);

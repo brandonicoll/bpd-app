@@ -14,7 +14,10 @@ export const JOINT_ACTIONS = {
   KNEE_EXTENSION_NONFIXED_HIP: 'knee_extension_nonfixed_hip',
   HIP_EXTENSION_STRAIGHT_KNEE: 'hip_extension_straight_knee',
   TRUNK_FLEXION: 'trunk_flexion',
+  TRUNK_ROTATION: 'trunk_rotation',
   PLANTAR_FLEXION: 'plantar_flexion',
+  SHOULDER_FLEXION: 'shoulder_flexion',
+  SCAPULAR_ELEVATION: 'scapular_elevation',
 };
 
 export const MUSCLE_GROUPS = {

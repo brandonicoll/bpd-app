@@ -5,10 +5,11 @@ import {
 } from 'react-native';
 import 'react-native-get-random-values';
 import { v4 as uuidv4 } from 'uuid';
+import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/ThemeContext';
 import { spacing, fontSizes, borderRadius } from '../../theme';
 import { saveCustomExercise, saveExerciseOverride } from '../../services/storage';
-import { JOINT_ACTION_LABELS, JOINT_ACTION_KEYS } from '../../data/jointActionLabels';
+import { JOINT_ACTIONS_DATA, JOINT_ACTION_KEYS } from '../../data/jointActionLabels';
 
 const RPE_OPTIONS = [6, 7, 8, 9, 10];
 
@@ -18,6 +19,7 @@ export default function CustomExerciseModal({ visible, onClose, onSaved, editExe
 
   const [name, setName] = useState('');
   const [selectedActions, setSelectedActions] = useState([]);
+  const [actionPickerOpen, setActionPickerOpen] = useState(false);
   const [repMin, setRepMin] = useState('8');
   const [repMax, setRepMax] = useState('12');
   const [rpe, setRpe] = useState(8);
@@ -28,6 +30,7 @@ export default function CustomExerciseModal({ visible, onClose, onSaved, editExe
     if (visible && editExercise) {
       setName(editExercise.name || '');
       setSelectedActions(editExercise.jointActions || []);
+      setActionPickerOpen(false);
       setRepMin(String(editExercise.defaultRepRange?.[0] ?? 8));
       setRepMax(String(editExercise.defaultRepRange?.[1] ?? 12));
       setRpe(editExercise.defaultRPE ?? 8);
@@ -39,8 +42,8 @@ export default function CustomExerciseModal({ visible, onClose, onSaved, editExe
   }, [visible, editExercise]);
 
   function reset() {
-    setName(''); setSelectedActions([]); setRepMin('8');
-    setRepMax('12'); setRpe(8); setNotes(''); setSaving(false);
+    setName(''); setSelectedActions([]); setActionPickerOpen(false);
+    setRepMin('8'); setRepMax('12'); setRpe(8); setNotes(''); setSaving(false);
   }
 
   function handleClose() { reset(); onClose(); }
@@ -157,24 +160,84 @@ export default function CustomExerciseModal({ visible, onClose, onSaved, editExe
           />
 
           <Text style={styles.label}>Joint action(s) *</Text>
-          <Text style={styles.labelHint}>This tells the app which movements this exercise can replace.</Text>
-          <View style={styles.actionsGrid}>
-            {JOINT_ACTION_KEYS.map(key => {
-              const isSelected = selectedActions.includes(key);
-              return (
+
+          {/* Collapsed summary row */}
+          <TouchableOpacity
+            onPress={() => setActionPickerOpen(o => !o)}
+            activeOpacity={0.7}
+            style={[styles.pickerToggle, actionPickerOpen && styles.pickerToggleOpen]}
+          >
+            <View style={styles.pickerToggleLeft}>
+              {selectedActions.length === 0 ? (
+                <Text style={styles.pickerPlaceholder}>
+                  Select — most exercises involve more than one
+                </Text>
+              ) : (
+                <Text style={styles.pickerCount}>
+                  {selectedActions.length} selected
+                </Text>
+              )}
+            </View>
+            <Ionicons
+              name={actionPickerOpen ? 'chevron-up' : 'chevron-down'}
+              size={16}
+              color={colors.textSecondary}
+            />
+          </TouchableOpacity>
+
+          {/* Selected chips shown when collapsed */}
+          {!actionPickerOpen && selectedActions.length > 0 && (
+            <View style={styles.selectedChips}>
+              {selectedActions.map(key => (
                 <TouchableOpacity
                   key={key}
                   onPress={() => toggleAction(key)}
                   activeOpacity={0.7}
-                  style={[styles.actionChip, isSelected && styles.actionChipSelected]}
+                  style={styles.selectedChip}
                 >
-                  <Text style={[styles.actionChipText, isSelected && styles.actionChipTextSelected]}>
-                    {JOINT_ACTION_LABELS[key]}
-                  </Text>
+                  <Text style={styles.selectedChipText}>{JOINT_ACTIONS_DATA[key]?.label}</Text>
+                  <Ionicons name="close" size={11} color={colors.primary} style={{ marginLeft: 4 }} />
                 </TouchableOpacity>
-              );
-            })}
-          </View>
+              ))}
+            </View>
+          )}
+
+          {/* Expanded picker list */}
+          {actionPickerOpen && (
+            <View style={styles.actionsList}>
+              {JOINT_ACTION_KEYS.map(key => {
+                const isSelected = selectedActions.includes(key);
+                const data = JOINT_ACTIONS_DATA[key];
+                return (
+                  <TouchableOpacity
+                    key={key}
+                    onPress={() => toggleAction(key)}
+                    activeOpacity={0.7}
+                    style={[styles.actionRow, isSelected && styles.actionRowSelected]}
+                  >
+                    <View style={styles.actionRowLeft}>
+                      <Text style={[styles.actionRowLabel, isSelected && styles.actionRowLabelSelected]}>
+                        {data.label}
+                      </Text>
+                      <Text style={[styles.actionRowExample, isSelected && styles.actionRowExampleSelected]}>
+                        e.g. {data.example}
+                      </Text>
+                    </View>
+                    <View style={[styles.actionRowCheck, isSelected && styles.actionRowCheckSelected]}>
+                      {isSelected && <Text style={styles.actionRowCheckMark}>✓</Text>}
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+              <TouchableOpacity
+                onPress={() => setActionPickerOpen(false)}
+                activeOpacity={0.7}
+                style={styles.doneBtn}
+              >
+                <Text style={styles.doneBtnText}>Done</Text>
+              </TouchableOpacity>
+            </View>
+          )}
 
           <Text style={styles.label}>Rep range *</Text>
           <View style={styles.repRow}>
@@ -239,7 +302,6 @@ const makeStyles = (colors) => StyleSheet.create({
     textTransform: 'uppercase', letterSpacing: 0.8,
     marginBottom: spacing.xs, marginTop: spacing.md,
   },
-  labelHint: { fontSize: fontSizes.xs, color: colors.textSecondary, marginBottom: spacing.sm, marginTop: -4 },
   optional: { fontWeight: '400', textTransform: 'none', letterSpacing: 0, color: colors.textTertiary },
   input: {
     backgroundColor: colors.surface, borderRadius: borderRadius.md,
@@ -248,14 +310,62 @@ const makeStyles = (colors) => StyleSheet.create({
     fontSize: fontSizes.md, color: colors.text,
   },
   notesInput: { height: 80, paddingTop: spacing.sm },
-  actionsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  actionChip: {
-    paddingHorizontal: 12, paddingVertical: 7, borderRadius: borderRadius.full,
-    borderWidth: 1.5, borderColor: colors.border, backgroundColor: colors.surface,
+
+  // Picker toggle
+  pickerToggle: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: colors.surface, borderRadius: borderRadius.md,
+    borderWidth: 1, borderColor: colors.border,
+    paddingHorizontal: spacing.md, paddingVertical: 13,
   },
-  actionChipSelected: { borderColor: colors.primary, backgroundColor: colors.primaryLight },
-  actionChipText: { fontSize: fontSizes.xs, fontWeight: '600', color: colors.textSecondary },
-  actionChipTextSelected: { color: colors.primary },
+  pickerToggleOpen: { borderColor: colors.primary, borderBottomLeftRadius: 0, borderBottomRightRadius: 0 },
+  pickerToggleLeft: { flex: 1 },
+  pickerPlaceholder: { fontSize: fontSizes.sm, color: colors.textTertiary },
+  pickerCount: { fontSize: fontSizes.sm, fontWeight: '600', color: colors.text },
+
+  // Selected chips (collapsed state)
+  selectedChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 },
+  selectedChip: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 10, paddingVertical: 5,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.primaryLight,
+    borderWidth: 1, borderColor: colors.primary,
+  },
+  selectedChipText: { fontSize: fontSizes.xs, fontWeight: '600', color: colors.primary },
+
+  // Expanded list
+  actionsList: {
+    borderWidth: 1, borderTopWidth: 0, borderColor: colors.primary,
+    borderBottomLeftRadius: borderRadius.md, borderBottomRightRadius: borderRadius.md,
+    overflow: 'hidden',
+  },
+  actionRow: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: spacing.md, paddingVertical: 10,
+    borderTopWidth: 0.5, borderTopColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  actionRowSelected: { backgroundColor: colors.primaryLight },
+  actionRowLeft: { flex: 1, marginRight: spacing.sm },
+  actionRowLabel: { fontSize: fontSizes.sm, fontWeight: '600', color: colors.textSecondary },
+  actionRowLabelSelected: { color: colors.primary },
+  actionRowExample: { fontSize: fontSizes.xs, color: colors.textTertiary, marginTop: 1 },
+  actionRowExampleSelected: { color: colors.primary, opacity: 0.75 },
+  actionRowCheck: {
+    width: 22, height: 22, borderRadius: 11,
+    borderWidth: 1.5, borderColor: colors.border,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  actionRowCheckSelected: { borderColor: colors.primary, backgroundColor: colors.primary },
+  actionRowCheckMark: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  doneBtn: {
+    paddingVertical: 12, alignItems: 'center',
+    borderTopWidth: 0.5, borderTopColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  doneBtnText: { fontSize: fontSizes.sm, fontWeight: '700', color: colors.primary },
+
   repRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   repGroup: { flex: 1 },
   repGroupLabel: { fontSize: fontSizes.xs, color: colors.textTertiary, marginBottom: 4 },

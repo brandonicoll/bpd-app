@@ -9,7 +9,7 @@ import { spacing, fontSizes, borderRadius } from '../../theme';
 import { useTheme } from '../../theme/ThemeContext';
 import { runAdjustmentEngine, SEVERITY, REC_TYPES } from '../../services/adjustmentEngine';
 import { getCurrentBlockInfo } from '../../services/programEngine';
-import { getWeightUnit } from '../../services/storage';
+import { useWeightUnit } from '../../context/WeightUnitContext';
 
 function TrendIcon({ trend }) {
   const { colors } = useTheme();
@@ -86,11 +86,7 @@ export default function InsightsScreen({ navigation }) {
   const [engineData, setEngineData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [weightUnit, setWeightUnit] = useState('lbs');
-
-  useEffect(() => {
-    getWeightUnit().then(setWeightUnit);
-  }, []);
+  const { weightUnit } = useWeightUnit();
 
   const load = useCallback(async () => {
     try {

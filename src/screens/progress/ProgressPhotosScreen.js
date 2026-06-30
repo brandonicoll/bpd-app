@@ -7,6 +7,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/ThemeContext';
+import { useWeightUnit } from '../../context/WeightUnitContext';
 import { spacing, fontSizes, borderRadius } from '../../theme';
 import {
   getProgressPhotos, saveProgressPhoto, deleteProgressPhoto,
@@ -19,6 +20,7 @@ const TILE = (width - spacing.lg * 2 - GAP) / COL;
 
 export default function ProgressPhotosScreen({ navigation }) {
   const { colors } = useTheme();
+  const { weightUnit } = useWeightUnit();
   const styles = makeStyles(colors);
 
   const [photos, setPhotos] = useState([]);
@@ -58,7 +60,7 @@ export default function ProgressPhotosScreen({ navigation }) {
 
     setUploading(true);
     try {
-      await saveProgressPhoto({ pickedUri: uri, date: new Date().toISOString() });
+      await saveProgressPhoto({ pickedUri: uri, date: new Date().toISOString(), weightUnit });
       await load();
     } catch (e) {
       console.error('saveProgressPhoto error:', e);

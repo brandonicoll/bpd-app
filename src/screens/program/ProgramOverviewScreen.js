@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   SafeAreaView, Modal, FlatList, Alert, ActivityIndicator,
-  RefreshControl, TextInput,
+  RefreshControl, TextInput, Keyboard,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { spacing, fontSizes, borderRadius } from '../../theme';
@@ -607,10 +607,12 @@ function EditExerciseConfigModal({ visible, ex, exConfig, dayLabel, onClose, onS
       setRepMin(String(exConfig.repRange?.[0] ?? 8));
       setRepMax(String(exConfig.repRange?.[1] ?? 12));
       setRpe(exConfig.rpe ?? 8);
+      setSaving(false);
     }
   }, [visible, exConfig]);
 
   async function handleSave() {
+    Keyboard.dismiss();
     const setsNum = Math.max(1, parseInt(sets) || 1);
     const min = parseInt(repMin) || 1;
     const max = parseInt(repMax) || 1;
@@ -653,12 +655,20 @@ function EditExerciseConfigModal({ visible, ex, exConfig, dayLabel, onClose, onS
         <View style={ecs.repRow}>
           <View style={ecs.repGroup}>
             <Text style={ecs.repGroupLabel}>Min</Text>
-            <TextInput style={ecs.repInput} value={repMin} onChangeText={setRepMin} keyboardType="number-pad" maxLength={2} />
+            <TextInput
+              style={ecs.repInput} value={repMin} onChangeText={setRepMin}
+              keyboardType="number-pad" maxLength={2}
+              returnKeyType="done" onSubmitEditing={() => Keyboard.dismiss()}
+            />
           </View>
           <Text style={ecs.repDash}>–</Text>
           <View style={ecs.repGroup}>
             <Text style={ecs.repGroupLabel}>Max</Text>
-            <TextInput style={ecs.repInput} value={repMax} onChangeText={setRepMax} keyboardType="number-pad" maxLength={2} />
+            <TextInput
+              style={ecs.repInput} value={repMax} onChangeText={setRepMax}
+              keyboardType="number-pad" maxLength={2}
+              returnKeyType="done" onSubmitEditing={() => Keyboard.dismiss()}
+            />
           </View>
         </View>
 

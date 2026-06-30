@@ -5,6 +5,7 @@ import { useTheme } from '../../theme/ThemeContext';
 import { spacing, fontSizes, borderRadius } from '../../theme';
 import { getCurrentProgram, updateTrainingAge } from '../../services/storage';
 import { TRAINING_AGE } from '../../data/splits';
+import { useWeightUnit } from '../../context/WeightUnitContext';
 
 const TRAINING_AGE_OPTIONS = [
   { value: TRAINING_AGE.BEGINNER,     label: 'Beginner',     subtitle: '0–1 years — learning movements, building base strength' },
@@ -14,6 +15,7 @@ const TRAINING_AGE_OPTIONS = [
 
 export default function SettingsScreen({ navigation }) {
   const { colors, isDark, toggleTheme } = useTheme();
+  const { weightUnit, setWeightUnit } = useWeightUnit();
   const styles = makeStyles(colors);
   const [trainingAge, setTrainingAge] = useState(null);
 
@@ -96,6 +98,24 @@ export default function SettingsScreen({ navigation }) {
             </TouchableOpacity>
           </View>
         )}
+
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Units</Text>
+          <View style={styles.row}>
+            <View style={styles.rowLeft}>
+              <Text style={styles.rowTitle}>Weight unit</Text>
+              <Text style={styles.rowSubtitle}>
+                {weightUnit === 'kg' ? 'Kilograms (kg)' : 'Pounds (lbs)'}
+              </Text>
+            </View>
+            <Switch
+              value={weightUnit === 'kg'}
+              onValueChange={v => setWeightUnit(v ? 'kg' : 'lbs')}
+              trackColor={{ false: colors.border, true: colors.primary }}
+              thumbColor="#fff"
+            />
+          </View>
+        </View>
 
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>Appearance</Text>

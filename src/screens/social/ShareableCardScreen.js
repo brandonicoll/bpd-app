@@ -8,6 +8,7 @@ import * as Sharing from 'expo-sharing';
 import { Ionicons } from '@expo/vector-icons';
 import { spacing, fontSizes, borderRadius } from '../../theme';
 import { useTheme } from '../../theme/ThemeContext';
+import { useWeightUnit } from '../../context/WeightUnitContext';
 import { getAllSessions, getStreak, getCurrentProgram } from '../../services/storage';
 import { getCurrentBlockInfo } from '../../services/programEngine';
 import { exercises as exerciseLibrary } from '../../data/exercises';
@@ -40,6 +41,7 @@ function getTopLiftThisWeek(sessions) {
 
 function ProgressCard({ data }) {
   const { colors } = useTheme();
+  const { weightUnit } = useWeightUnit();
   const card = makeCardStyles(colors);
   const { program, blockInfo, sessionsThisWeek, streak, topLift } = data;
   const completionRatio = program ? Math.min(sessionsThisWeek / program.daysPerWeek, 1) : 0;
@@ -95,7 +97,7 @@ function ProgressCard({ data }) {
           <View style={card.liftSection}>
             <Text style={card.liftLabel}>Top lift this week</Text>
             <Text style={card.liftName}>{topLift.exerciseName}</Text>
-            <Text style={card.liftE1RM}>{topLift.e1RM}kg est. 1RM</Text>
+            <Text style={card.liftE1RM}>{topLift.e1RM}{weightUnit} est. 1RM</Text>
           </View>
         </>
       )}

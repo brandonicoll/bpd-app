@@ -11,7 +11,7 @@ function findExercise(id) {
   return exerciseLibrary.find(e => e.id === id) || _customExercises.find(e => e.id === id);
 }
 import { PLATEAU_THRESHOLDS, TRAINING_AGE } from '../data/splits';
-import { JOINT_ACTION_LABELS } from '../data/jointActionLabels';
+import { JOINT_ACTION_LABELS, JOINT_ACTIONS_DATA } from '../data/jointActionLabels';
 import { getWeekStart } from '../utils/dateHelpers';
 
 // ─── Recommendation types ─────────────────────────────────────────────────────
@@ -47,7 +47,7 @@ const JOINT_ACTION_VOLUME_THRESHOLDS = {
 const BASE_RECOVERY_THRESHOLD = 0.97;
 
 // Push and pull joint actions for balance check
-const PUSH_JOINT_ACTIONS = ['horizontal_shoulder_adduction', 'shoulder_abduction'];
+const PUSH_JOINT_ACTIONS = ['horizontal_shoulder_adduction', 'shoulder_abduction', 'shoulder_flexion'];
 const PULL_JOINT_ACTIONS = ['horizontal_humeral_abduction', 'shoulder_adduction'];
 
 const MIN_INTER_SESSION_COMPARISONS = 3;
@@ -154,9 +154,11 @@ export function calculateJointActionMetrics(program, exerciseTrends, allSessions
         }
 
         const entry = map[jointAction];
+        // Accessory actions contribute half the fatigue load of primary joint actions
+        const setWeight = JOINT_ACTIONS_DATA[jointAction]?.isAccessory ? 0.5 : 1;
         if (!entry.exercises.includes(exConfig.exerciseId)) {
           entry.exercises.push(exConfig.exerciseId);
-          entry.totalWeeklySets += exConfig.sets;
+          entry.totalWeeklySets += exConfig.sets * setWeight;
         }
         if (!entry.dayLabels.includes(splitDay.dayLabel)) {
           entry.dayLabels.push(splitDay.dayLabel);
@@ -192,10 +194,11 @@ export function calculateJointActionMetrics(program, exerciseTrends, allSessions
           dayLabels: [],
         };
       }
+      const setWeight = JOINT_ACTIONS_DATA[jointAction]?.isAccessory ? 0.5 : 1;
       const entry = map[jointAction];
       if (!entry.exercises.includes(trend.exerciseId)) {
         entry.exercises.push(trend.exerciseId);
-        entry.totalWeeklySets += Math.round(avgSets);
+        entry.totalWeeklySets += Math.round(avgSets * setWeight);
       }
       if (trend.dayLabel && !entry.dayLabels.includes(trend.dayLabel)) {
         entry.dayLabels.push(trend.dayLabel);

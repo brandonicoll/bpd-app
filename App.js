@@ -5,6 +5,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AppProvider } from './src/context/AppContext';
 import { SubscriptionProvider } from './src/context/SubscriptionContext';
 import { ThemeProvider } from './src/theme/ThemeContext';
+import { WeightUnitProvider } from './src/context/WeightUnitContext';
 import { initializePurchases } from './src/services/purchases';
 import RootNavigator from './src/navigation';
 
@@ -16,11 +17,13 @@ export default function App() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <ThemeProvider>
-          <AppProvider>
-            <SubscriptionProvider>
-              <RootNavigator />
-            </SubscriptionProvider>
-          </AppProvider>
+          <WeightUnitProvider>
+            <AppProvider>
+              <SubscriptionProvider>
+                <RootNavigator />
+              </SubscriptionProvider>
+            </AppProvider>
+          </WeightUnitProvider>
         </ThemeProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

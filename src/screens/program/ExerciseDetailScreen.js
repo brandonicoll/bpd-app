@@ -5,7 +5,8 @@ import {
 } from 'react-native';
 import { spacing, fontSizes, borderRadius } from '../../theme';
 import { useTheme } from '../../theme/ThemeContext';
-import { getExerciseProgressTrend, getCustomExercises, getWeightUnit } from '../../services/storage';
+import { getExerciseProgressTrend, getCustomExercises } from '../../services/storage';
+import { useWeightUnit } from '../../context/WeightUnitContext';
 import { exercises as exerciseLibrary } from '../../data/exercises';
 import { JOINT_ACTION_LABELS } from '../../data/jointActionLabels';
 import SimpleLineChart from '../../components/common/SimpleLineChart';
@@ -24,11 +25,7 @@ export default function ExerciseDetailScreen({ navigation, route }) {
   );
   const [progressData, setProgressData] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [weightUnit, setWeightUnit] = useState('lbs');
-
-  useEffect(() => {
-    getWeightUnit().then(setWeightUnit);
-  }, []);
+  const { weightUnit } = useWeightUnit();
 
   useLayoutEffect(() => {
     if (exerciseDef) {

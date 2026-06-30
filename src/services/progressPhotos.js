@@ -14,7 +14,7 @@ async function ensureDir() {
   }
 }
 
-export async function captureStatSnapshot() {
+export async function captureStatSnapshot(weightUnit = 'lbs') {
   const [sessions, program] = await Promise.all([getAllSessions(), getCurrentProgram()]);
 
   const e1rms = {};
@@ -32,25 +32,25 @@ export async function captureStatSnapshot() {
     e1rms,
     currentWeek: program?.currentWeek || null,
     currentBlock: program?.currentBlock || null,
-    weightUnit: 'lbs',
+    weightUnit,
   };
 }
 
-export async function saveProgressPhoto({ pickedUri, date, weight, note }) {
+export async function saveProgressPhoto({ pickedUri, date, weight, note, weightUnit = 'lbs' }) {
   await ensureDir();
   const id = `photo_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   const dest = `${PHOTO_DIR}${id}.jpg`;
 
   await FileSystem.copyAsync({ from: pickedUri, to: dest });
 
-  const snapshot = await captureStatSnapshot();
+  const snapshot = await captureStatSnapshot(weightUnit);
 
   const photo = {
     id,
     date: date || new Date().toISOString(),
     imageUri: dest,
     weight: weight ? Number(weight) : null,
-    weightUnit: 'lbs',
+    weightUnit,
     note: note || '',
     snapshot,
     createdAt: new Date().toISOString(),
