@@ -432,6 +432,7 @@ export default function ActiveWorkoutScreen({ navigation, route }) {
   const draftTimerRef = useRef(null);
   const [restStartedAt, setRestStartedAt] = useState(Date.now());
   const [restElapsed, setRestElapsed] = useState(0);
+  const [sessionNote, setSessionNote] = useState('');
 
   const { weightUnit, setWeightUnit } = useWeightUnit();
   const [previousData, setPreviousData] = useState({});
@@ -712,6 +713,7 @@ export default function ActiveWorkoutScreen({ navigation, route }) {
         startTime: startTime.current,
         endTime,
         weightUnit,
+        note: sessionNote.trim() || null,
         exercises: sessionExercises
           .filter(ex => ex.sets.some(s => s.weight || s.reps))
           .map(ex => ({
@@ -854,6 +856,21 @@ export default function ActiveWorkoutScreen({ navigation, route }) {
             <Text style={styles.addExerciseText}>Add exercise</Text>
           </TouchableOpacity>
 
+          {/* Session note */}
+          <View style={styles.sessionNoteCard}>
+            <Text style={styles.sessionNoteLabel}>Session note</Text>
+            <TextInput
+              style={styles.sessionNoteInput}
+              value={sessionNote}
+              onChangeText={setSessionNote}
+              placeholder="How did the session go overall?"
+              placeholderTextColor={colors.textTertiary}
+              multiline
+              returnKeyType="done"
+              blurOnSubmit
+            />
+          </View>
+
           <TouchableOpacity
             onPress={handleFinish}
             disabled={finishing}
@@ -934,6 +951,28 @@ const makeStyles = (colors) => StyleSheet.create({
   },
   addExercisePlus: { fontSize: fontSizes.lg, color: colors.primary, fontWeight: '700' },
   addExerciseText: { fontSize: fontSizes.sm, fontWeight: '700', color: colors.primary },
+  sessionNoteCard: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  sessionNoteLabel: {
+    fontSize: fontSizes.xs,
+    fontWeight: '600',
+    color: colors.textTertiary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: spacing.sm,
+  },
+  sessionNoteInput: {
+    fontSize: fontSizes.sm,
+    color: colors.text,
+    minHeight: 60,
+    textAlignVertical: 'top',
+  },
   bottomFinishBtn: {
     backgroundColor: colors.primary, borderRadius: borderRadius.lg,
     height: 52, alignItems: 'center', justifyContent: 'center', marginTop: spacing.xs,

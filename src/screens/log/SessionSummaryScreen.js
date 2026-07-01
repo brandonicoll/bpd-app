@@ -153,6 +153,14 @@ export default function SessionSummaryScreen({ navigation, route }) {
           );
         })}
 
+        {/* Session note */}
+        {session.note && (
+          <View style={styles.sessionNoteCard}>
+            <Text style={styles.sessionNoteLabel}>Session note</Text>
+            <Text style={styles.sessionNoteText}>{session.note}</Text>
+          </View>
+        )}
+
         {/* Discomfort flags */}
         {session.exercises.some(ex => ex.discomfortRating >= 8) && (
           <View style={styles.flagCard}>
@@ -306,6 +314,27 @@ const makeStyles = (colors) => StyleSheet.create({
   flagTitle: { fontSize: fontSizes.sm, fontWeight: '700', color: colors.danger, marginBottom: 4 },
   flagBody: { fontSize: fontSizes.sm, color: colors.danger, lineHeight: 20, opacity: 0.85 },
   doneBtn: { marginTop: spacing.md },
+  sessionNoteCard: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  sessionNoteLabel: {
+    fontSize: fontSizes.xs,
+    fontWeight: '600',
+    color: colors.textTertiary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 6,
+  },
+  sessionNoteText: {
+    fontSize: fontSizes.sm,
+    color: colors.text,
+    lineHeight: 20,
+  },
   energyCard: {
     backgroundColor: colors.surface,
     borderRadius: borderRadius.lg,
