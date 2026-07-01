@@ -38,8 +38,15 @@ export default function SessionSummaryScreen({ navigation, route }) {
     { value: 1, label: 'Low',   icon: 'battery-dead-outline', iconColor: colors.danger   },
   ];
 
+  const SLEEP_OPTIONS = [
+    { value: 3, label: 'Good',  icon: 'moon',               iconColor: colors.primary      },
+    { value: 2, label: 'Okay',  icon: 'moon-outline',        iconColor: colors.textTertiary },
+    { value: 1, label: 'Poor',  icon: 'alert-circle-outline', iconColor: colors.danger      },
+  ];
+
   const { session, startTime, endTime, weightUnit = 'lbs' } = route.params;
   const [energyRating, setEnergyRating] = useState(null);
+  const [sleepQuality, setSleepQuality] = useState(null);
 
   const durationMins = getDurationMinutes(startTime, endTime);
   const totalSets = session.exercises.reduce((sum, ex) => sum + ex.sets.length, 0);
@@ -58,8 +65,11 @@ export default function SessionSummaryScreen({ navigation, route }) {
   );
 
   async function handleDone() {
-    if (energyRating !== null) {
-      await updateSession(session.id, { energyRating });
+    const patch = {};
+    if (energyRating !== null) patch.energyRating = energyRating;
+    if (sleepQuality !== null) patch.sleepQuality = sleepQuality;
+    if (Object.keys(patch).length > 0) {
+      await updateSession(session.id, patch);
     }
     navigation.dispatch(StackActions.popToTop());
     navigation.navigate('HomeTab', { screen: 'Home' });
@@ -179,6 +189,34 @@ export default function SessionSummaryScreen({ navigation, route }) {
             })}
           </View>
           <Text style={styles.energyNote}>Optional — helps the engine track fatigue trends</Text>
+        </View>
+
+        {/* Sleep quality */}
+        <View style={styles.energyCard}>
+          <Text style={styles.energyTitle}>How was your sleep last night?</Text>
+          <View style={styles.energyRow}>
+            {SLEEP_OPTIONS.map(opt => {
+              const isSelected = sleepQuality === opt.value;
+              return (
+                <TouchableOpacity
+                  key={opt.value}
+                  onPress={() => setSleepQuality(prev => prev === opt.value ? null : opt.value)}
+                  activeOpacity={0.75}
+                  style={[styles.energyOption, isSelected && styles.energyOptionSelected]}
+                >
+                  <Ionicons
+                    name={opt.icon}
+                    size={24}
+                    color={isSelected ? colors.primary : opt.iconColor}
+                  />
+                  <Text style={[styles.energyLabel, isSelected && styles.energyLabelSelected]}>
+                    {opt.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+          <Text style={styles.energyNote}>Optional — poor sleep sessions are discounted in the algo</Text>
         </View>
 
         <Button title="Done" onPress={handleDone} style={styles.doneBtn} />

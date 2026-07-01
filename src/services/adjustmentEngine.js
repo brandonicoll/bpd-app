@@ -28,6 +28,7 @@ export const REC_TYPES = {
   REORDER_EXERCISE:           'REORDER_EXERCISE',
   DELOAD_SIGNAL:              'DELOAD_SIGNAL',
   PUSH_PULL_IMBALANCE:        'PUSH_PULL_IMBALANCE',
+  SLEEP_FLAG:                 'SLEEP_FLAG',
 };
 
 export const SEVERITY = {
@@ -62,6 +63,20 @@ function getPlateauThreshold(trainingAge, age) {
 function getRecoveryThreshold(age) {
   // 50+ lifters have longer inter-session recovery — only flag at 8% drop, not 3%
   return (age != null && age >= 50) ? 0.92 : BASE_RECOVERY_THRESHOLD;
+}
+
+// ─── Sleep quality helpers ────────────────────────────────────────────────────
+// sleepQuality: 3 = Good, 2 = OK, 1 = Poor, null = not rated (treated as normal)
+function getSleepWeight(session) {
+  const sq = session.sleepQuality;
+  if (sq == null) return 1.0;
+  if (sq === 1)   return 0;    // poor sleep — excluded from stall counter
+  if (sq === 2)   return 0.5;  // ok sleep — half weight
+  return 1.0;                  // good sleep
+}
+
+function isPoorSleep(session) {
+  return session.sleepQuality === 1;
 }
 
 // ─── Helper: group sessions by week ──────────────────────────────────────────
@@ -246,6 +261,9 @@ export function detectInterSessionRecovery(jointAction, program, allSessions, re
 
     const firstSession  = relevantSessions[0];
     const secondSession = relevantSessions[1];
+
+    // Poor sleep in the second session explains the performance drop — not a real recovery issue.
+    if (isPoorSleep(secondSession)) continue;
 
     for (const exData of (firstSession.exercises || [])) {
       const exDef = findExercise(exData.exerciseId);
@@ -539,6 +557,34 @@ function checkPushPullBalance(jointActionMetrics) {
   };
 }
 
+// ─── Rule: Chronic poor sleep ─────────────────────────────────────────────────
+function checkChronicPoorSleep(allSessions) {
+  const ratedSessions = [...allSessions]
+    .filter(s => s.sleepQuality != null)
+    .sort((a, b) => new Date(b.date) - new Date(a.date))
+    .slice(0, 6);
+
+  if (ratedSessions.length < 3) return null;
+
+  const poorCount = ratedSessions.filter(s => s.sleepQuality === 1).length;
+  if (poorCount < 3) return null;
+
+  return {
+    id: 'chronic-poor-sleep',
+    type: REC_TYPES.SLEEP_FLAG,
+    severity: SEVERITY.INFO,
+    exerciseId: null,
+    dayLabel: null,
+    title: 'Sleep quality may be limiting progress',
+    description: `You've reported poor sleep in ${poorCount} of your last ${ratedSessions.length} rated sessions. Chronic sleep deprivation reduces strength output, elevates RPE for the same weights, and impairs muscle protein synthesis — so your recent session data may not reflect your true training capacity. The engine is discounting poor-sleep sessions when evaluating progress stalls and recovery.`,
+    guideRule: 'Make sure your nutrition, stress, and sleep are all good before attributing stalls to your programming.',
+    actionLabel: null,
+    actionType: null,
+    dataPoint: `Poor sleep: ${poorCount} of last ${ratedSessions.length} rated sessions`,
+    generatedAt: new Date().toISOString(),
+  };
+}
+
 // ─── Rule 2: Progress stalls ─────────────────────────────────────────────────
 const TRAINING_AGE_PROGRESS_CONTEXT = {
   [TRAINING_AGE.BEGINNER]:     'As a beginner, you should progress most sessions — a stall this early likely means a quick fix is needed.',
@@ -586,8 +632,14 @@ function checkProgressStalls(program, allSessions, checkIns, exerciseTrends, joi
         }));
       };
 
+      // Exclude poor-sleep sessions from the "last e1RM" comparison — a bad-sleep
+      // session is not a reliable measure of actual progress.
+      const reliableSessions = window.filter(s => getSleepWeight(s) > 0);
+      // If fewer than half the window has reliable sleep data, defer the stall check.
+      if (reliableSessions.length < Math.ceil(threshold / 2)) continue;
+
       const firstE1RM = getSessionE1RM(window[0]);
-      const lastE1RM  = getSessionE1RM(window[window.length - 1]);
+      const lastE1RM  = getSessionE1RM(reliableSessions[reliableSessions.length - 1]);
       if (firstE1RM === 0 || lastE1RM === 0) continue;
 
       const e1rmDelta = ((lastE1RM - firstE1RM) / firstE1RM) * 100;
@@ -969,6 +1021,9 @@ export async function runAdjustmentEngine() {
       const pushPullRec = checkPushPullBalance(jointActionMetrics);
       if (pushPullRec) recommendations.push(pushPullRec);
     }
+
+    const sleepRec = checkChronicPoorSleep(allSessions);
+    if (sleepRec) recommendations.push(sleepRec);
   }
 
   // Deduplicate: one rec per type+exercise combination
