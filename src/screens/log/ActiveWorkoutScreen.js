@@ -150,11 +150,11 @@ const makeFeelerStyles = (colors) => StyleSheet.create({
   inputLabel: { fontSize: fontSizes.xs, color: colors.textTertiary, marginBottom: 3, fontWeight: '500' },
   inputWrap: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: colors.primary + '08',
-    borderWidth: 1, borderColor: colors.primary + '30',
+    backgroundColor: colors.surface,
+    borderWidth: 1, borderColor: colors.border,
     borderRadius: borderRadius.sm, paddingHorizontal: spacing.sm, height: 40,
   },
-  input: { flex: 1, fontSize: fontSizes.md, fontWeight: '600', color: colors.text, padding: 0 },
+  input: { flex: 1, fontSize: fontSizes.md, fontWeight: '500', color: colors.textSecondary, padding: 0 },
   unit: { fontSize: fontSizes.xs, color: colors.textTertiary },
 });
 
@@ -399,8 +399,11 @@ function ExerciseCard({
       )}
 
       {/* Feeler / warmup sets */}
-      <View style={exStyles.feelerSection}>
-        <Text style={exStyles.feelerSectionLabel}>Feeler sets</Text>
+      <View style={exStyles.feelerBlock}>
+        <View style={exStyles.feelerBlockHeader}>
+          <Text style={exStyles.feelerBlockTitle}>Feeler / Warmup</Text>
+          <Text style={exStyles.feelerBlockHint}>not counted toward volume</Text>
+        </View>
         {feelerSets.map((set, i) => (
           <FeelerSetRow
             key={i}
@@ -413,7 +416,7 @@ function ExerciseCard({
         ))}
       </View>
 
-      <View style={exStyles.feelerDivider} />
+      <Text style={exStyles.workingSetsLabel}>Working sets</Text>
 
       {sets.map((set, setIndex) => (
         <SetRow
@@ -508,12 +511,28 @@ const makeExStyles = (colors) => StyleSheet.create({
   },
   prevLabel: { fontSize: fontSizes.xs, color: colors.primary, fontWeight: '600' },
   prevValue: { fontSize: fontSizes.xs, color: colors.primaryDark, fontWeight: '500' },
-  feelerSection: { marginBottom: spacing.sm },
-  feelerSectionLabel: {
-    fontSize: fontSizes.xs, fontWeight: '700', color: colors.primary,
+  feelerBlock: {
+    backgroundColor: colors.background,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderStyle: 'dashed',
+    padding: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  feelerBlockHeader: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    marginBottom: spacing.sm,
+  },
+  feelerBlockTitle: {
+    fontSize: fontSizes.xs, fontWeight: '700', color: colors.textSecondary,
+    textTransform: 'uppercase', letterSpacing: 0.8,
+  },
+  feelerBlockHint: { fontSize: fontSizes.xs, color: colors.textTertiary, fontStyle: 'italic' },
+  workingSetsLabel: {
+    fontSize: fontSizes.xs, fontWeight: '700', color: colors.textTertiary,
     textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: spacing.sm,
   },
-  feelerDivider: { height: 0.5, backgroundColor: colors.border, marginBottom: spacing.sm },
   addSetBtn: {
     paddingVertical: spacing.sm, alignItems: 'center',
     borderWidth: 1, borderColor: colors.border, borderRadius: borderRadius.md,
