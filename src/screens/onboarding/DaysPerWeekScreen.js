@@ -10,7 +10,7 @@ const SPLIT_HINTS = {
   2: 'Full Body split recommended',
   3: 'Full Body split recommended',
   4: 'Upper / Lower split recommended',
-  5: 'Push / Pull / Legs recommended',
+  5: 'PPL / Upper Lower recommended',
   6: 'Push / Pull / Legs recommended',
 };
 
