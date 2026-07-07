@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import { spacing, fontSizes, borderRadius } from '../../theme';
 import { useTheme } from '../../theme/ThemeContext';
 import { useHomeData, getNextSession } from '../../hooks/useHomeData';
@@ -35,6 +36,13 @@ export default function HomeScreen({ navigation }) {
   } = useHomeData();
 
   const [refreshing, setRefreshing] = React.useState(false);
+
+  // Re-fetch whenever the tab comes back into focus (e.g. after logging a workout)
+  useFocusEffect(
+    React.useCallback(() => {
+      refresh();
+    }, [refresh])
+  );
 
   async function handleRefresh() {
     setRefreshing(true);

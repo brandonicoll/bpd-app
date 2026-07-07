@@ -217,19 +217,25 @@ export async function updateStreak(weekData) {
     });
   }
 
-  // Recalculate streak: a week counts if completed >= 1 session
-  // Full ≥80% logic runs when we have planned count from program
+  // Recalculate streak: count consecutive calendar weeks (Mon-Sun) with ≥1 session.
+  // Must verify weeks are actually 7 days apart — missing weeks have no entry in
+  // history so a gap is invisible to a simple completed>=1 loop.
   const sortedWeeks = [...streak.weeklyCompletionHistory].sort(
     (a, b) => new Date(b.weekStartDate) - new Date(a.weekStartDate)
   );
 
   let current = 0;
+  let prevDate = null;
   for (const week of sortedWeeks) {
-    if (week.completed >= 1) {
-      current++;
-    } else {
-      break;
+    if (week.completed < 1) break;
+    if (prevDate !== null) {
+      const daysDiff = Math.round(
+        (prevDate - new Date(week.weekStartDate)) / (1000 * 60 * 60 * 24)
+      );
+      if (daysDiff !== 7) break; // gap detected — streak ends here
     }
+    current++;
+    prevDate = new Date(week.weekStartDate);
   }
 
   streak.currentStreak = current;
