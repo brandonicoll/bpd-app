@@ -28,6 +28,35 @@ import {
 } from '../../utils/workoutHelpers';
 import { relativeDateLabel, getWeekStart } from '../../utils/dateHelpers';
 
+// ─── Feeler set helpers ───────────────────────────────────────────────────────
+function isCompoundExercise(exerciseDef) {
+  const actions = (exerciseDef?.jointActions || []).filter(a => a !== 'accessory');
+  return actions.length > 1;
+}
+
+function getTopSetWeight(previousData) {
+  const sets = previousData?.sets || [];
+  const max = Math.max(0, ...sets.map(s => parseFloat(s.weight) || 0));
+  return max > 0 ? max : null;
+}
+
+function getFeelerSuggestions(exerciseDef, previousData) {
+  const topWeight = getTopSetWeight(previousData);
+  if (!topWeight) return [];
+  if (isCompoundExercise(exerciseDef)) {
+    return [
+      { weight: Math.round(topWeight * 0.5), reps: 5 },
+      { weight: Math.round(topWeight * 0.7), reps: 3 },
+    ];
+  }
+  return [{ weight: Math.round(topWeight * 0.65), reps: 5 }];
+}
+
+function makeFeelerSets(exerciseDef) {
+  const count = isCompoundExercise(exerciseDef) ? 2 : 1;
+  return Array.from({ length: count }, () => ({ weight: '', reps: '' }));
+}
+
 // ─── RPE Selector ─────────────────────────────────────────────────────────────
 const RPE_OPTIONS = [6, 7, 8, 9, 10];
 
@@ -64,6 +93,69 @@ const makeRpeStyles = (colors) => StyleSheet.create({
   chipSelected: { borderColor: colors.primary, backgroundColor: colors.primaryLight },
   chipText: { fontSize: fontSizes.xs, fontWeight: '600', color: colors.textSecondary },
   chipTextSelected: { color: colors.primary },
+});
+
+// ─── Feeler Set Row ───────────────────────────────────────────────────────────
+function FeelerSetRow({ label, set, suggestion, weightUnit, onUpdate }) {
+  const { colors } = useTheme();
+  const fs = makeFeelerStyles(colors);
+  return (
+    <View style={fs.container}>
+      <View style={fs.badge}>
+        <Text style={fs.badgeText}>{label}</Text>
+      </View>
+      <View style={fs.inputGroup}>
+        <Text style={fs.inputLabel}>Weight</Text>
+        <View style={fs.inputWrap}>
+          <TextInput
+            style={fs.input}
+            value={set.weight}
+            onChangeText={v => onUpdate('weight', v)}
+            keyboardType="decimal-pad"
+            placeholder={suggestion?.weight != null ? String(suggestion.weight) : '—'}
+            placeholderTextColor={colors.primary + '70'}
+            returnKeyType="next"
+          />
+          <Text style={fs.unit}>{weightUnit}</Text>
+        </View>
+      </View>
+      <View style={fs.inputGroup}>
+        <Text style={fs.inputLabel}>Reps</Text>
+        <View style={fs.inputWrap}>
+          <TextInput
+            style={fs.input}
+            value={set.reps}
+            onChangeText={v => onUpdate('reps', v)}
+            keyboardType="number-pad"
+            placeholder={suggestion?.reps != null ? String(suggestion.reps) : '—'}
+            placeholderTextColor={colors.primary + '70'}
+            returnKeyType="done"
+          />
+        </View>
+      </View>
+      <View style={{ width: 24 }} />
+    </View>
+  );
+}
+
+const makeFeelerStyles = (colors) => StyleSheet.create({
+  container: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: 6 },
+  badge: {
+    width: 28, height: 28, borderRadius: 14,
+    backgroundColor: colors.primary + '22',
+    alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+  },
+  badgeText: { fontSize: fontSizes.xs, fontWeight: '700', color: colors.primary },
+  inputGroup: { flex: 1 },
+  inputLabel: { fontSize: fontSizes.xs, color: colors.textTertiary, marginBottom: 3, fontWeight: '500' },
+  inputWrap: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: colors.primary + '08',
+    borderWidth: 1, borderColor: colors.primary + '30',
+    borderRadius: borderRadius.sm, paddingHorizontal: spacing.sm, height: 40,
+  },
+  input: { flex: 1, fontSize: fontSizes.md, fontWeight: '600', color: colors.text, padding: 0 },
+  unit: { fontSize: fontSizes.xs, color: colors.textTertiary },
 });
 
 // ─── Set Row ──────────────────────────────────────────────────────────────────
@@ -248,11 +340,13 @@ const makePickerStyles = (colors) => StyleSheet.create({
 function ExerciseCard({
   exerciseData, exerciseDef, exConfig, currentBlock, weightUnit,
   previousData, onSetUpdate, onSetAdd, onSetDelete, onDiscomfortChange,
-  onNotesChange, onManage,
+  onNotesChange, onFeelerUpdate, onManage,
 }) {
   const { colors } = useTheme();
   const exStyles = makeExStyles(colors);
-  const { sets, discomfortRating, notes } = exerciseData;
+  const { sets, discomfortRating, notes, feelerSets: rawFeelerSets } = exerciseData;
+  const feelerSets = rawFeelerSets ?? makeFeelerSets(exerciseDef);
+  const feelerSuggestions = getFeelerSuggestions(exerciseDef, previousData);
   const rpeGuidance = getExerciseRPEGuidance(exConfig, currentBlock);
   const prevSets = previousData?.sets || [];
 
@@ -303,6 +397,23 @@ function ExerciseCard({
           </Text>
         </View>
       )}
+
+      {/* Feeler / warmup sets */}
+      <View style={exStyles.feelerSection}>
+        <Text style={exStyles.feelerSectionLabel}>Feeler sets</Text>
+        {feelerSets.map((set, i) => (
+          <FeelerSetRow
+            key={i}
+            label={`W${i + 1}`}
+            set={set}
+            suggestion={feelerSuggestions[i]}
+            weightUnit={weightUnit}
+            onUpdate={(field, value) => onFeelerUpdate(i, field, value)}
+          />
+        ))}
+      </View>
+
+      <View style={exStyles.feelerDivider} />
 
       {sets.map((set, setIndex) => (
         <SetRow
@@ -397,6 +508,12 @@ const makeExStyles = (colors) => StyleSheet.create({
   },
   prevLabel: { fontSize: fontSizes.xs, color: colors.primary, fontWeight: '600' },
   prevValue: { fontSize: fontSizes.xs, color: colors.primaryDark, fontWeight: '500' },
+  feelerSection: { marginBottom: spacing.sm },
+  feelerSectionLabel: {
+    fontSize: fontSizes.xs, fontWeight: '700', color: colors.primary,
+    textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: spacing.sm,
+  },
+  feelerDivider: { height: 0.5, backgroundColor: colors.border, marginBottom: spacing.sm },
   addSetBtn: {
     paddingVertical: spacing.sm, alignItems: 'center',
     borderWidth: 1, borderColor: colors.border, borderRadius: borderRadius.md,
@@ -450,18 +567,22 @@ export default function ActiveWorkoutScreen({ navigation, route }) {
 
   const [sessionExercises, setSessionExercises] = useState(() => {
     if (draftData?.exercises) return draftData.exercises;
-    return splitDay.exercises.map(exConfig => ({
-      exerciseId: exConfig.exerciseId,
-      exConfig,
-      discomfortRating: null,
-      notes: '',
-      sets: Array.from({ length: exConfig.sets || 2 }, () => ({
-        weight: '',
-        reps: '',
-        rpe: null,
-        completedAt: new Date().toISOString(),
-      })),
-    }));
+    return splitDay.exercises.map(exConfig => {
+      const def = exerciseLibrary.find(e => e.id === exConfig.exerciseId);
+      return {
+        exerciseId: exConfig.exerciseId,
+        exConfig,
+        discomfortRating: null,
+        notes: '',
+        feelerSets: makeFeelerSets(def),
+        sets: Array.from({ length: exConfig.sets || 2 }, () => ({
+          weight: '',
+          reps: '',
+          rpe: null,
+          completedAt: new Date().toISOString(),
+        })),
+      };
+    });
   });
 
   useEffect(() => {
@@ -565,6 +686,17 @@ export default function ActiveWorkoutScreen({ navigation, route }) {
     );
   }
 
+  function updateFeelerSet(exerciseIndex, setIndex, field, value) {
+    setSessionExercises(prev =>
+      prev.map((ex, i) => {
+        if (i !== exerciseIndex) return ex;
+        const feelerSets = [...(ex.feelerSets || [])];
+        feelerSets[setIndex] = { ...feelerSets[setIndex], [field]: value };
+        return { ...ex, feelerSets };
+      })
+    );
+  }
+
   function handleManageExercise(exIndex) {
     const ex = sessionExercises[exIndex];
     const exDef = allExercises.find(e => e.id === ex.exerciseId);
@@ -635,6 +767,7 @@ export default function ActiveWorkoutScreen({ navigation, route }) {
       exConfig,
       discomfortRating: null,
       notes: '',
+      feelerSets: makeFeelerSets(exerciseDef),
       sets: Array.from({ length: 3 }, () => ({
         weight: '', reps: '', rpe: null, completedAt: new Date().toISOString(),
       })),
@@ -667,6 +800,7 @@ export default function ActiveWorkoutScreen({ navigation, route }) {
       exConfig,
       discomfortRating: null,
       notes: '',
+      feelerSets: makeFeelerSets(exercise),
       sets: Array.from({ length: 3 }, () => ({
         weight: '', reps: '', rpe: null, completedAt: new Date().toISOString(),
       })),
@@ -721,6 +855,7 @@ export default function ActiveWorkoutScreen({ navigation, route }) {
             discomfortRating: ex.discomfortRating,
             notes: ex.notes || '',
             sets: ex.sets,
+            feelerSets: (ex.feelerSets || []).filter(s => s.weight || s.reps),
           })),
       };
 
@@ -837,6 +972,7 @@ export default function ActiveWorkoutScreen({ navigation, route }) {
                 onSetDelete={setIndex => deleteSet(exIndex, setIndex)}
                 onDiscomfortChange={rating => updateDiscomfort(exIndex, rating)}
                 onNotesChange={notes => updateNotes(exIndex, notes)}
+                onFeelerUpdate={(setIndex, field, value) => updateFeelerSet(exIndex, setIndex, field, value)}
                 onManage={() => handleManageExercise(exIndex)}
               />
             );
