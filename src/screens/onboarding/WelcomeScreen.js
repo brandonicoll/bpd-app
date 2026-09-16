@@ -1,12 +1,16 @@
 import React from 'react';
-import { View, Text, StyleSheet, SafeAreaView } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, ScrollView } from 'react-native';
 import { colors, spacing, fontSizes, borderRadius } from '../../theme';
 import Button from '../../components/common/Button';
 
 export default function WelcomeScreen({ navigation }) {
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.container}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.container}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Logo area */}
         <View style={styles.logoArea}>
           <View style={styles.logoBadge}>
@@ -32,16 +36,17 @@ export default function WelcomeScreen({ navigation }) {
           ))}
         </View>
 
-        {/* CTA */}
-        <View style={styles.footer}>
-          <Button
-            title="Get started"
-            onPress={() => navigation.navigate('TrainingAge')}
-          />
-          <Text style={styles.disclaimer}>
-            Takes about 2 minutes. No account needed to start.
-          </Text>
-        </View>
+      </ScrollView>
+
+      {/* CTA */}
+      <View style={styles.footer}>
+        <Button
+          title="Get started"
+          onPress={() => navigation.navigate('TrainingAge')}
+        />
+        <Text style={styles.disclaimer}>
+          Takes about 2 minutes. No account needed to start.
+        </Text>
       </View>
     </SafeAreaView>
   );
@@ -52,11 +57,14 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  container: {
+  scroll: {
     flex: 1,
+  },
+  container: {
+    flexGrow: 1,
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.xxl,
-    paddingBottom: spacing.xl,
+    paddingBottom: spacing.md,
     justifyContent: 'space-between',
   },
   logoArea: {
@@ -103,7 +111,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
-    marginBottom: spacing.xl,
   },
   pill: {
     backgroundColor: colors.primaryLight,
@@ -118,6 +125,9 @@ const styles = StyleSheet.create({
   },
   footer: {
     gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.md,
   },
   disclaimer: {
     fontSize: fontSizes.xs,

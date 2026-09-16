@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { KEYS } from '../services/storage';
 
 const AppContext = createContext(null);
 
@@ -14,8 +15,8 @@ export function AppProvider({ children }) {
 
   async function checkOnboardingStatus() {
     try {
-      const value = await AsyncStorage.getItem('hasCompletedOnboarding');
-      const program = await AsyncStorage.getItem('currentProgram');
+      const value = await AsyncStorage.getItem(KEYS.HAS_COMPLETED_ONBOARDING);
+      const program = await AsyncStorage.getItem(KEYS.CURRENT_PROGRAM);
       setHasCompletedOnboarding(value === 'true');
       setCurrentProgram(program ? JSON.parse(program) : null);
     } catch (e) {
@@ -26,8 +27,8 @@ export function AppProvider({ children }) {
   }
 
   async function completeOnboarding(programData) {
-    await AsyncStorage.setItem('hasCompletedOnboarding', 'true');
-    await AsyncStorage.setItem('currentProgram', JSON.stringify(programData));
+    await AsyncStorage.setItem(KEYS.HAS_COMPLETED_ONBOARDING, 'true');
+    await AsyncStorage.setItem(KEYS.CURRENT_PROGRAM, JSON.stringify(programData));
     setCurrentProgram(programData);
     setHasCompletedOnboarding(true);
   }

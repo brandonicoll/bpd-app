@@ -30,7 +30,9 @@ export default function RootNavigator() {
     );
   }
 
-  const skipPaywall = process.env.EXPO_PUBLIC_SKIP_PAYWALL === 'true';
+  // __DEV__ guard ensures this can never take effect in a production/TestFlight/
+  // App Store build even if EXPO_PUBLIC_SKIP_PAYWALL is left set to 'true' in .env.
+  const skipPaywall = __DEV__ && process.env.EXPO_PUBLIC_SKIP_PAYWALL === 'true';
   if (!isSubscribed && !skipPaywall) {
     return <PaywallScreen />;
   }

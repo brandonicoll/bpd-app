@@ -1,10 +1,10 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getAllSessions, getCurrentProgram, getCustomExercises } from './storage';
+import { getAllSessions, getCurrentProgram, getCustomExercises, KEYS } from './storage';
 import { exercises as builtInExercises } from '../data/exercises';
 import { getBestE1RM } from '../utils/workoutHelpers';
 
-const PHOTOS_KEY = 'progressPhotos';
+const PHOTOS_KEY = KEYS.PROGRESS_PHOTOS;
 const PHOTO_DIR = FileSystem.documentDirectory + 'progress_photos/';
 
 async function ensureDir() {

@@ -1,32 +1,15 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView } from 'react-native';
+import React from 'react';
+import { View, Text, StyleSheet, SafeAreaView, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, fontSizes, borderRadius } from '../../theme';
 import Button from '../../components/common/Button';
-import { useApp } from '../../context/AppContext';
-import { buildDefaultProgram, getCurrentBlockInfo } from '../../services/programEngine';
-import { saveUserProfile, saveCurrentProgram } from '../../services/storage';
+import { getCurrentBlockInfo } from '../../services/programEngine';
 import { TRAINING_AGE_LABELS } from '../../data/splits';
 
-export default function OnboardingCompleteScreen({ route }) {
+export default function OnboardingCompleteScreen({ route, navigation }) {
   const { trainingAge, daysPerWeek, splitType, age } = route.params;
-  const { completeOnboarding } = useApp();
-  const [saving, setSaving] = useState(false);
 
-  const program = buildDefaultProgram({ trainingAge, daysPerWeek, splitType, age });
   const block = getCurrentBlockInfo(1);
-
-  async function handleStart() {
-    setSaving(true);
-    try {
-      await saveUserProfile({ trainingAge, daysPerWeek, splitType, age, createdAt: new Date().toISOString() });
-      await saveCurrentProgram(program);
-      await completeOnboarding(program);
-    } catch (e) {
-      console.error('Error saving onboarding data:', e);
-      setSaving(false);
-    }
-  }
 
   const summaryItems = [
     { label: 'Training age', value: TRAINING_AGE_LABELS[trainingAge] },
@@ -39,7 +22,11 @@ export default function OnboardingCompleteScreen({ route }) {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.container}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.container}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Header */}
         <View style={styles.headerArea}>
           <View style={styles.checkBadge}>
@@ -74,12 +61,12 @@ export default function OnboardingCompleteScreen({ route }) {
         <Text style={styles.note}>
           We've set up default exercises for each training day. You can swap any of them from the Program tab once you're in.
         </Text>
+      </ScrollView>
 
+      <View style={styles.footer}>
         <Button
-          title="Let's go"
-          onPress={handleStart}
-          loading={saving}
-          style={styles.cta}
+          title="Continue"
+          onPress={() => navigation.navigate('CoachingIntro', { trainingAge, daysPerWeek, splitType, age })}
         />
       </View>
     </SafeAreaView>
@@ -91,11 +78,13 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  container: {
+  scroll: {
     flex: 1,
+  },
+  container: {
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.xl,
-    paddingBottom: spacing.xl,
+    paddingBottom: spacing.md,
   },
   headerArea: {
     alignItems: 'center',
@@ -178,10 +167,13 @@ const styles = StyleSheet.create({
     color: colors.textTertiary,
     textAlign: 'center',
     lineHeight: 18,
-    marginBottom: spacing.lg,
     paddingHorizontal: spacing.md,
   },
-  cta: {
-    marginTop: 'auto',
+  footer: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.md,
+    borderTopWidth: 0.5,
+    borderTopColor: colors.border,
   },
 });

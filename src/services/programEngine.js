@@ -138,8 +138,8 @@ const BPF_SPLITS = {
       { exerciseId: 'machine_shoulder_press',     sets: 2, repRange: [8, 12],  rpe: 8 },
       { exerciseId: 'machine_fly',                sets: 2, repRange: [6, 10],  rpe: 10 },
       { exerciseId: 'dips',                       sets: 2, repRange: [6, 10],  rpe: 9 },
+      { exerciseId: 'cable_lateral_raise',        sets: 2, repRange: [8, 12],  rpe: 9 },
       { exerciseId: 'cable_tricep_extension',     sets: 2, repRange: [8, 12],  rpe: 10 },
-      { exerciseId: 'skull_crusher',              sets: 2, repRange: [7, 11],  rpe: 8 },
       { exerciseId: 'cable_crunch',               sets: 2, repRange: [7, 11],  rpe: 9 },
     ],
     'Pull B': [
@@ -248,9 +248,9 @@ export function buildDefaultProgram(profile) {
 export function getCurrentBlockInfo(currentBlock) {
   const blocks = {
     1: { blockNumber: 1, name: 'Technique & Control', weeks: '1–2', targetRIR: '3–4', tempo: '2-1-1', description: 'Focus on form perfection. Controlled tempo, full ROM. No intensity yet — build the habit.', allowAdjustments: false, color: '#1D9E75' },
-    2: { blockNumber: 2, name: 'Intensity Awareness', weeks: '3–4', targetRIR: '1', tempo: '2-1-1', description: 'Find true effort. Push sets to technical failure. Note which movements feel overly fatiguing.', allowAdjustments: false, color: '#185FA5' },
-    3: { blockNumber: 3, name: 'Structured Progression', weeks: '5–10', targetRIR: '2', tempo: '2-1-1', description: 'Run the program as written. Track every session. Do not change exercises or volume — data collection is the goal.', allowAdjustments: false, color: '#534AB7' },
-    4: { blockNumber: 4, name: 'Optimize & Adjust', weeks: '11–12', targetRIR: '2', tempo: '2-1-1', description: "Small intentional tweaks based on your data. Keep your split — refine what isn't working.", allowAdjustments: true, color: '#D85A30' },
+    2: { blockNumber: 2, name: 'Intensity Awareness', weeks: '3–4', targetRIR: '1', tempo: '2-1-0', description: 'Find true effort. Push sets to technical failure. Note which movements feel overly fatiguing.', allowAdjustments: false, color: '#185FA5' },
+    3: { blockNumber: 3, name: 'Structured Progression', weeks: '5–10', targetRIR: '2', tempo: '2-0-0', description: 'Run the program as written. Track every session. Do not change exercises or volume — data collection is the goal.', allowAdjustments: false, color: '#534AB7' },
+    4: { blockNumber: 4, name: 'Optimize & Adjust', weeks: '11–12', targetRIR: '2', tempo: 'Controlled', description: "Small intentional tweaks based on your data. Keep your split — refine what isn't working.", allowAdjustments: true, color: '#D85A30' },
   };
   return blocks[currentBlock] || blocks[1];
 }

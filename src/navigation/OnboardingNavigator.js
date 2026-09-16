@@ -6,6 +6,7 @@ import DaysPerWeekScreen from '../screens/onboarding/DaysPerWeekScreen';
 import SplitSelectionScreen from '../screens/onboarding/SplitSelectionScreen';
 import AgeScreen from '../screens/onboarding/AgeScreen';
 import OnboardingCompleteScreen from '../screens/onboarding/OnboardingCompleteScreen';
+import CoachingIntroScreen from '../screens/onboarding/CoachingIntroScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -18,6 +19,7 @@ export default function OnboardingNavigator() {
       <Stack.Screen name="SplitSelection" component={SplitSelectionScreen} />
       <Stack.Screen name="Age" component={AgeScreen} />
       <Stack.Screen name="OnboardingComplete" component={OnboardingCompleteScreen} />
+      <Stack.Screen name="CoachingIntro" component={CoachingIntroScreen} />
     </Stack.Navigator>
   );
 }

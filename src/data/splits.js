@@ -94,7 +94,7 @@ export const PLATEAU_THRESHOLDS = {
 
 export const PROGRAM_BLOCKS = {
   1: { blockNumber: 1, name: 'Technique & Control', weeks: [1, 2], targetRIR: 4, tempo: '2-1-1', description: 'Focus on form perfection. Controlled tempo, full range of motion. No intensity yet.', allowAdjustments: false },
-  2: { blockNumber: 2, name: 'Intensity Awareness', weeks: [3, 4], targetRIR: 1, tempo: '2-1-1', description: 'Find true effort. Push sets to technical failure. Identify overly fatiguing movements.', allowAdjustments: false },
-  3: { blockNumber: 3, name: 'Structured Progression', weeks: [5, 10], targetRIR: 2, tempo: '2-1-1', description: 'Run the program as written. Track every session. Do not change exercises or volume.', allowAdjustments: false },
-  4: { blockNumber: 4, name: 'Optimize & Adjust', weeks: [11, 12], targetRIR: 2, tempo: '2-1-1', description: "Small intentional tweaks based on your data. Keep your split — refine what isn't working.", allowAdjustments: true },
+  2: { blockNumber: 2, name: 'Intensity Awareness', weeks: [3, 4], targetRIR: 1, tempo: '2-1-0', description: 'Find true effort. Push sets to technical failure. Identify overly fatiguing movements.', allowAdjustments: false },
+  3: { blockNumber: 3, name: 'Structured Progression', weeks: [5, 10], targetRIR: 2, tempo: '2-0-0', description: 'Run the program as written. Track every session. Do not change exercises or volume.', allowAdjustments: false },
+  4: { blockNumber: 4, name: 'Optimize & Adjust', weeks: [11, 12], targetRIR: 2, tempo: 'Controlled', description: "Small intentional tweaks based on your data. Keep your split — refine what isn't working.", allowAdjustments: true },
 };

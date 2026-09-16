@@ -13,7 +13,7 @@ import { useWeightUnit } from '../../context/WeightUnitContext';
 import {
   saveSession,
   maybeAdvanceProgramWeek,
-  getLastSessionForExercise,
+  getLastSessionsForExercises,
   updateStreak,
   saveDraftSession,
   clearDraftSession,
@@ -55,6 +55,15 @@ function getFeelerSuggestions(exerciseDef, previousData) {
 function makeFeelerSets(exerciseDef) {
   const count = isCompoundExercise(exerciseDef) ? 2 : 1;
   return Array.from({ length: count }, () => ({ weight: '', reps: '' }));
+}
+
+// Inputs hold strings while logging; sessions store numbers.
+function normalizeSet(set) {
+  return {
+    ...set,
+    weight: parseFloat(set.weight) || 0,
+    reps: parseInt(set.reps, 10) || 0,
+  };
 }
 
 // ─── RPE Selector ─────────────────────────────────────────────────────────────
@@ -568,7 +577,7 @@ export default function ActiveWorkoutScreen({ navigation, route }) {
   const draftTimerRef = useRef(null);
   const [restStartedAt, setRestStartedAt] = useState(Date.now());
   const [restElapsed, setRestElapsed] = useState(0);
-  const [sessionNote, setSessionNote] = useState('');
+  const [sessionNote, setSessionNote] = useState(draftData?.sessionNote || '');
 
   const { weightUnit, setWeightUnit } = useWeightUnit();
   const [previousData, setPreviousData] = useState({});
@@ -627,11 +636,7 @@ export default function ActiveWorkoutScreen({ navigation, route }) {
   }
 
   async function loadPreviousData(ids) {
-    const results = {};
-    for (const id of ids) {
-      const prev = await getLastSessionForExercise(id);
-      if (prev) results[id] = prev;
-    }
+    const results = await getLastSessionsForExercises(ids);
     setPreviousData(prev => ({ ...prev, ...results }));
   }
 
@@ -644,13 +649,14 @@ export default function ActiveWorkoutScreen({ navigation, route }) {
         currentBlock,
         startTime: startTime.current,
         exercises: sessionExercises,
+        sessionNote,
         weightUnit,
       });
     }, 2000);
     return () => {
       if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
     };
-  }, [sessionExercises, weightUnit]);
+  }, [sessionExercises, sessionNote, weightUnit]);
 
   async function toggleWeightUnit() {
     await setWeightUnit(weightUnit === 'lbs' ? 'kg' : 'lbs');
@@ -873,8 +879,8 @@ export default function ActiveWorkoutScreen({ navigation, route }) {
             exerciseId: ex.exerciseId,
             discomfortRating: ex.discomfortRating,
             notes: ex.notes || '',
-            sets: ex.sets,
-            feelerSets: (ex.feelerSets || []).filter(s => s.weight || s.reps),
+            sets: ex.sets.filter(s => s.weight || s.reps).map(normalizeSet),
+            feelerSets: (ex.feelerSets || []).filter(s => s.weight || s.reps).map(normalizeSet),
           })),
       };
 
@@ -883,7 +889,7 @@ export default function ActiveWorkoutScreen({ navigation, route }) {
       await maybeAdvanceProgramWeek();
 
       const weekStart = getWeekStart().toISOString().split('T')[0];
-      await updateStreak({ weekStartDate: weekStart, planned: 1 });
+      await updateStreak({ weekStartDate: weekStart });
 
       navigation.replace('SessionSummary', {
         session,
@@ -927,6 +933,7 @@ export default function ActiveWorkoutScreen({ navigation, route }) {
                       splitDay, currentBlock,
                       startTime: startTime.current,
                       exercises: sessionExercises,
+                      sessionNote,
                       weightUnit,
                     }).then(() => navigation.goBack());
                   },

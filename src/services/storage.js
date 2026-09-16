@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { advanceWeek } from './programEngine';
 
 // ─── Storage keys ──────────────────────────────────────────────
-const KEYS = {
+export const KEYS = {
   USER_PROFILE: 'userProfile',
   CURRENT_PROGRAM: 'currentProgram',
   SESSIONS: 'sessions',
@@ -10,6 +10,11 @@ const KEYS = {
   STREAK: 'streak',
   ADJUSTMENT_LOG: 'adjustmentLog',
   HAS_COMPLETED_ONBOARDING: 'hasCompletedOnboarding',
+  CUSTOM_EXERCISES: 'customExercises',
+  EXERCISE_OVERRIDES: 'exerciseOverrides',
+  WEIGHT_UNIT: 'weightUnit',
+  DRAFT_SESSION: 'draftSession',
+  PROGRESS_PHOTOS: 'progressPhotos',
 };
 
 // ─── Generic helpers ───────────────────────────────────────────
@@ -198,8 +203,9 @@ export async function getStreak() {
 }
 
 export async function updateStreak(weekData) {
-  const streak = await getStreak();
+  const [streak, program] = await Promise.all([getStreak(), getCurrentProgram()]);
   const { weekStartDate } = weekData;
+  const planned = weekData.planned || program?.daysPerWeek || 1;
 
   const weekIndex = streak.weeklyCompletionHistory.findIndex(
     w => w.weekStartDate === weekStartDate
@@ -208,12 +214,13 @@ export async function updateStreak(weekData) {
   if (weekIndex >= 0) {
     // Increment completed count for this week
     streak.weeklyCompletionHistory[weekIndex].completed += 1;
+    streak.weeklyCompletionHistory[weekIndex].planned = planned;
   } else {
     // New week entry
     streak.weeklyCompletionHistory.push({
       weekStartDate,
       completed: 1,
-      planned: weekData.planned || 1,
+      planned,
     });
   }
 
@@ -268,10 +275,14 @@ export async function updateAdjustmentStatus(id, status) {
 }
 
 // ─── Progress helpers ─────────────────────────────────────────
-// Calculate estimated 1 rep max using Epley formula
+// Calculate estimated 1 rep max using Epley formula.
+// Coerces string inputs from logged sets; returns 0 for missing/invalid values.
 export function calculateE1RM(weight, reps) {
-  if (reps === 1) return weight;
-  return Math.round(weight * (1 + reps / 30));
+  const w = parseFloat(weight) || 0;
+  const r = parseInt(reps, 10) || 0;
+  if (w <= 0 || r <= 0) return 0;
+  if (r === 1) return w;
+  return Math.round(w * (1 + r / 30));
 }
 
 // Get progress trend for a specific exercise over the last N sessions
@@ -286,31 +297,53 @@ export async function getExerciseProgressTrend(exerciseId, lastNSessions = 10) {
     if (!exerciseData) return null;
     const bestSet = exerciseData.sets.reduce((best, set) => {
       const e1rm = calculateE1RM(set.weight, set.reps);
-      return e1rm > calculateE1RM(best.weight, best.reps) ? set : best;
-    }, exerciseData.sets[0]);
+      return e1rm > calculateE1RM(best?.weight, best?.reps) ? set : best;
+    }, null) || exerciseData.sets[0];
+
+    const ratedSets = exerciseData.sets.filter(s => s.rpe != null);
 
     return {
       date: session.date,
       bestWeight: bestSet?.weight || 0,
       bestReps: bestSet?.reps || 0,
-      e1RM: bestSet ? calculateE1RM(bestSet.weight, bestSet.reps) : 0,
-      avgRPE: exerciseData.sets.reduce((sum, s) => sum + s.rpe, 0) / exerciseData.sets.length,
+      e1RM: calculateE1RM(bestSet?.weight, bestSet?.reps),
+      avgRPE: ratedSets.length
+        ? ratedSets.reduce((sum, s) => sum + s.rpe, 0) / ratedSets.length
+        : null,
       discomfortRating: exerciseData.discomfortRating,
     };
   }).filter(Boolean);
 }
 
+// Get the most recent session data for each of the given exercises.
+// Reads the session history once and returns { [exerciseId]: { sets, discomfortRating, notes, date } }.
+export async function getLastSessionsForExercises(exerciseIds) {
+  const sessions = await getAllSessions();
+  const sorted = [...sessions].sort((a, b) => new Date(b.date) - new Date(a.date));
+
+  const results = {};
+  for (const session of sorted) {
+    if (Object.keys(results).length === exerciseIds.length) break;
+    for (const exerciseData of session.exercises) {
+      const id = exerciseData.exerciseId;
+      if (!results[id] && exerciseIds.includes(id)) {
+        results[id] = {
+          sets: exerciseData.sets,
+          discomfortRating: exerciseData.discomfortRating,
+          notes: exerciseData.notes || '',
+          date: session.date,
+        };
+      }
+    }
+  }
+  return results;
+}
+
 // Get the most recent session that included a specific exercise
 // Returns { sets, discomfortRating, date } or null
 export async function getLastSessionForExercise(exerciseId) {
-  const sessions = await getSessionsForExercise(exerciseId);
-  if (!sessions.length) return null;
-  const sorted = sessions.sort((a, b) => new Date(b.date) - new Date(a.date));
-  const lastSession = sorted[0];
-  const exerciseData = lastSession.exercises.find(e => e.exerciseId === exerciseId);
-  return exerciseData
-    ? { sets: exerciseData.sets, discomfortRating: exerciseData.discomfortRating, notes: exerciseData.notes || '', date: lastSession.date }
-    : null;
+  const results = await getLastSessionsForExercises([exerciseId]);
+  return results[exerciseId] || null;
 }
 
 // Replace one exercise with another in a specific split day
@@ -334,7 +367,7 @@ export async function swapExerciseInProgram(dayLabel, oldExerciseId, newExercise
 }
 
 // ─── Custom exercises ─────────────────────────────────────────────────────────
-const CUSTOM_EXERCISES_KEY = 'customExercises';
+const CUSTOM_EXERCISES_KEY = KEYS.CUSTOM_EXERCISES;
 
 export async function getCustomExercises() {
   const data = await getItem(CUSTOM_EXERCISES_KEY);
@@ -357,7 +390,7 @@ export async function deleteCustomExercise(id) {
   return setItem(CUSTOM_EXERCISES_KEY, existing.filter(e => e.id !== id));
 }
 
-const EXERCISE_OVERRIDES_KEY = 'exerciseOverrides';
+const EXERCISE_OVERRIDES_KEY = KEYS.EXERCISE_OVERRIDES;
 
 export async function getExerciseOverrides() {
   const data = await getItem(EXERCISE_OVERRIDES_KEY);
@@ -471,7 +504,7 @@ export async function updateTrainingAge(trainingAge) {
 }
 
 // ─── Weight unit preference ────────────────────────────────────
-const WEIGHT_UNIT_KEY = 'weightUnit';
+const WEIGHT_UNIT_KEY = KEYS.WEIGHT_UNIT;
 
 export async function getWeightUnit() {
   const unit = await AsyncStorage.getItem(WEIGHT_UNIT_KEY);
@@ -483,7 +516,7 @@ export async function saveWeightUnit(unit) {
 }
 
 // ─── Draft session (auto-saved in-progress workout) ───────────
-const DRAFT_SESSION_KEY = 'draftSession';
+const DRAFT_SESSION_KEY = KEYS.DRAFT_SESSION;
 
 export async function saveDraftSession(data) {
   try {
@@ -541,6 +574,7 @@ export async function changeProgramSplit({ splitType, daysPerWeek }) {
 }
 
 // ─── Clear all data (dev/testing only) ────────────────────────
+// KEYS must list every key the app writes, or this leaves stale data behind.
 export async function clearAllData() {
   try {
     await AsyncStorage.multiRemove(Object.values(KEYS));
