@@ -14,7 +14,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.bpfcoaching.programming",
-      "buildNumber": "18",
+      "buildNumber": "19",
       "infoPlist": {
         "NSCameraUsageDescription": "Used to take progress photos.",
         "NSPhotoLibraryUsageDescription": "Used to select and save progress photos.",

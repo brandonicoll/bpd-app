@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Switch, SafeAreaView, ScrollView, TouchableOpacity, ActionSheetIOS, Platform, Alert } from 'react-native';
+import { View, Text, StyleSheet, Switch, SafeAreaView, ScrollView, TouchableOpacity, ActionSheetIOS, Platform, Alert, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/ThemeContext';
 import { spacing, fontSizes, borderRadius } from '../../theme';
 import { getCurrentProgram, updateTrainingAge } from '../../services/storage';
+import { exportBackup, pickAndValidateBackup, restoreBackup } from '../../services/backup';
 import { TRAINING_AGE } from '../../data/splits';
 import { useWeightUnit } from '../../context/WeightUnitContext';
 
@@ -18,12 +19,65 @@ export default function SettingsScreen({ navigation }) {
   const { weightUnit, setWeightUnit } = useWeightUnit();
   const styles = makeStyles(colors);
   const [trainingAge, setTrainingAge] = useState(null);
+  const [exporting, setExporting] = useState(false);
+  const [importing, setImporting] = useState(false);
 
   useEffect(() => {
     getCurrentProgram().then(p => {
       if (p?.trainingAge) setTrainingAge(p.trainingAge);
     });
   }, []);
+
+  async function handleExport() {
+    setExporting(true);
+    try {
+      await exportBackup();
+    } catch (e) {
+      console.error('exportBackup error:', e);
+      Alert.alert('Export failed', 'Could not export your data. Please try again.');
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  async function handleImport() {
+    setImporting(true);
+    try {
+      const backup = await pickAndValidateBackup();
+      if (!backup) { setImporting(false); return; } // user canceled the picker
+
+      const exportedDate = new Date(backup.exportedAt).toLocaleDateString();
+      Alert.alert(
+        'Restore this backup?',
+        `This backup was made on ${exportedDate}. Restoring it will replace all data currently on this device — that can't be undone.`,
+        [
+          { text: 'Cancel', style: 'cancel', onPress: () => setImporting(false) },
+          {
+            text: 'Restore',
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                const result = await restoreBackup(backup);
+                Alert.alert(
+                  'Restore complete',
+                  `Restored ${result.sessionCount} session${result.sessionCount === 1 ? '' : 's'} and ${result.photoCount} photo${result.photoCount === 1 ? '' : 's'}. Close and reopen the app to see your data.`
+                );
+              } catch (e) {
+                console.error('restoreBackup error:', e);
+                Alert.alert('Restore failed', 'Could not restore this backup. Please try again.');
+              } finally {
+                setImporting(false);
+              }
+            },
+          },
+        ]
+      );
+    } catch (e) {
+      console.error('pickAndValidateBackup error:', e);
+      Alert.alert('Import failed', e.message || 'Could not read that file.');
+      setImporting(false);
+    }
+  }
 
   function handleChangeTrainingAge() {
     const sheetOptions = [...TRAINING_AGE_OPTIONS.map(o => o.label), 'Cancel'];
@@ -118,6 +172,34 @@ export default function SettingsScreen({ navigation }) {
         </View>
 
         <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Data</Text>
+          <TouchableOpacity
+            style={[styles.row, styles.rowSpaced]}
+            onPress={handleExport}
+            activeOpacity={0.7}
+            disabled={exporting || importing}
+          >
+            <View style={styles.rowLeft}>
+              <Text style={styles.rowTitle}>Export my data</Text>
+              <Text style={styles.rowSubtitle}>Save a backup file with your full history and photos</Text>
+            </View>
+            {exporting ? <ActivityIndicator color={colors.primary} /> : <Ionicons name="chevron-forward" size={16} color={colors.textTertiary} />}
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.row}
+            onPress={handleImport}
+            activeOpacity={0.7}
+            disabled={exporting || importing}
+          >
+            <View style={styles.rowLeft}>
+              <Text style={styles.rowTitle}>Import data</Text>
+              <Text style={styles.rowSubtitle}>Restore from a backup file — e.g. after switching phones</Text>
+            </View>
+            {importing ? <ActivityIndicator color={colors.primary} /> : <Ionicons name="chevron-forward" size={16} color={colors.textTertiary} />}
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.section}>
           <Text style={styles.sectionLabel}>Appearance</Text>
           <View style={styles.row}>
             <View style={styles.rowLeft}>
@@ -156,6 +238,7 @@ const makeStyles = (colors) => StyleSheet.create({
     backgroundColor: colors.surface, borderRadius: borderRadius.lg,
     padding: spacing.md, borderWidth: 1, borderColor: colors.border,
   },
+  rowSpaced: { marginBottom: spacing.sm },
   rowLeft: { flex: 1, marginRight: spacing.md },
   rowTitle: { fontSize: fontSizes.md, fontWeight: '600', color: colors.text },
   rowSubtitle: { fontSize: fontSizes.xs, color: colors.textSecondary, marginTop: 2 },
