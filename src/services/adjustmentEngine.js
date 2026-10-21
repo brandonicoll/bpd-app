@@ -3,10 +3,21 @@ import {
   getAllSessions,
   getAllCheckIns,
   getCustomExercises,
+  getActivityLog,
 } from './storage';
 import { exercises as exerciseLibrary } from '../data/exercises';
+import { REGION_LABELS, REGION_BODY_WORDS } from '../data/activities';
+import {
+  HEAVY_WEEK_LOAD,
+  getExerciseRegions,
+  getJointActionRegion,
+  getHeavyLoadRegions,
+  isExerciseExternallyFatigued,
+  isRegionExternallyFatigued,
+} from './activityLoad';
 
 let _customExercises = [];
+let _activities = [];
 function findExercise(id) {
   return exerciseLibrary.find(e => e.id === id) || _customExercises.find(e => e.id === id);
 }
@@ -29,6 +40,7 @@ export const REC_TYPES = {
   DELOAD_SIGNAL:              'DELOAD_SIGNAL',
   PUSH_PULL_IMBALANCE:        'PUSH_PULL_IMBALANCE',
   SLEEP_FLAG:                 'SLEEP_FLAG',
+  EXTERNAL_LOAD_FLAG:         'EXTERNAL_LOAD_FLAG',
 };
 
 export const SEVERITY = {
@@ -264,6 +276,8 @@ export function detectInterSessionRecovery(jointAction, program, allSessions, re
 
     // Poor sleep in the second session explains the performance drop — not a real recovery issue.
     if (isPoorSleep(secondSession)) continue;
+    // Same for hard outside activity that loaded this region shortly before the second session.
+    if (isRegionExternallyFatigued(_activities, secondSession.date, getJointActionRegion(jointAction))) continue;
 
     for (const exData of (firstSession.exercises || [])) {
       const exDef = findExercise(exData.exerciseId);
@@ -437,8 +451,20 @@ function checkMidBlockFatigue(program, allSessions) {
     ? recentRPEs.reduce((a, b) => a + b, 0) / recentRPEs.length
     : null;
 
+  // Heavy outside activity is a third fatigue signal: when present, a slightly
+  // lower RPE is enough to confirm accumulated fatigue.
+  const heavyOutsideLoad = getHeavyLoadRegions(_activities);
+  const rpeBar = heavyOutsideLoad.length ? 7.5 : 8.0;
+
   // Both energy decline AND elevated RPE required to avoid false positives
-  if (avgRPE === null || avgRPE < 8.0) return null;
+  if (avgRPE === null || avgRPE < rpeBar) return null;
+
+  const outsideNote = heavyOutsideLoad.length
+    ? ' Your logged outside activity has also been heavy for two weeks running, adding to the fatigue your lifting has to recover from.'
+    : '';
+  const outsideData = heavyOutsideLoad.length
+    ? ` · Heavy outside load: ${heavyOutsideLoad.map(h => REGION_LABELS[h.region].toLowerCase()).join(', ')}`
+    : '';
 
   return {
     id: 'mid-block-deload',
@@ -447,11 +473,11 @@ function checkMidBlockFatigue(program, allSessions) {
     exerciseId: null,
     dayLabel: null,
     title: 'Deload week recommended',
-    description: `You're in week ${program.currentWeek} of Block 3 and your post-session energy has been declining while RPE is trending high. After several weeks of structured loading, accumulated fatigue can mask your true fitness. Take a deload: same exercises, reduce sets by ~40%, drop RPE to 6–7 across all movements. Resume full training the following week — you'll likely feel stronger.`,
+    description: `You're in week ${program.currentWeek} of Block 3 and your post-session energy has been declining while RPE is trending high.${outsideNote} After several weeks of structured loading, accumulated fatigue can mask your true fitness. Take a deload: same exercises, reduce sets by ~40%, drop RPE to 6–7 across all movements. Resume full training the following week — you'll likely feel stronger.`,
     guideRule: 'Fatigue accumulation during extended loading blocks is expected. A well-timed deload removes the fatigue mask and often reveals fitness gains underneath.',
     actionLabel: null,
     actionType: null,
-    dataPoint: `Energy trend: ${priorAvg.toFixed(1)} → ${recentAvg.toFixed(1)} (last 6 rated sessions) · Avg RPE: ${avgRPE.toFixed(1)}`,
+    dataPoint: `Energy trend: ${priorAvg.toFixed(1)} → ${recentAvg.toFixed(1)} (last 6 rated sessions) · Avg RPE: ${avgRPE.toFixed(1)}${outsideData}`,
     generatedAt: new Date().toISOString(),
   };
 }
@@ -585,6 +611,96 @@ function checkChronicPoorSleep(allSessions) {
   };
 }
 
+// ─── Rule: Heavy outside activity competing with lifting ─────────────────────
+function getSetE1RM(set) {
+  const w = parseFloat(set.weight) || 0;
+  const r = parseInt(set.reps) || 0;
+  return w && r ? Math.round(w * (1 + r / 30)) : 0;
+}
+
+// Is lifting in this region stalling or getting harder? Uses all sessions —
+// unlike the stall check, outside-activity sessions are NOT discounted here,
+// because the question is exactly whether that activity is hurting lifting.
+function getRegionStrainSignal(exerciseIds, allSessions, threshold) {
+  const stalled = [];
+  for (const exerciseId of exerciseIds) {
+    const exSessions = allSessions
+      .filter(s => s.exercises?.some(e => e.exerciseId === exerciseId))
+      .sort((a, b) => new Date(a.date) - new Date(b.date))
+      .slice(-threshold);
+    if (exSessions.length < threshold) continue;
+    const best = s => Math.max(0, ...(s.exercises.find(e => e.exerciseId === exerciseId)?.sets || []).map(getSetE1RM));
+    const first = best(exSessions[0]);
+    const last  = best(exSessions[exSessions.length - 1]);
+    if (first > 0 && last > 0 && ((last - first) / first) * 100 < 2.5) stalled.push(exerciseId);
+  }
+
+  const regionRPEs = session => session.exercises
+    .filter(e => exerciseIds.includes(e.exerciseId))
+    .flatMap(e => (e.sets || []).map(s => s.rpe).filter(r => r != null));
+  const rated = allSessions
+    .filter(s => regionRPEs(s).length)
+    .sort((a, b) => new Date(b.date) - new Date(a.date));
+  let rpeFrom = null;
+  let rpeTo = null;
+  if (rated.length >= 6) {
+    const avg = sessions => {
+      const all = sessions.flatMap(regionRPEs);
+      return all.reduce((a, b) => a + b, 0) / all.length;
+    };
+    rpeTo = avg(rated.slice(0, 3));
+    rpeFrom = avg(rated.slice(3, 6));
+  }
+  const rpeClimbing = rpeFrom !== null && rpeTo - rpeFrom >= 0.5;
+
+  if (!stalled.length && !rpeClimbing) return null;
+  return { stalled, rpeClimbing, rpeFrom, rpeTo };
+}
+
+function checkExternalLoad(program, allSessions) {
+  const recommendations = [];
+  const threshold = getPlateauThreshold(program.trainingAge, program.age);
+
+  for (const { region, thisWeek, lastWeek } of getHeavyLoadRegions(_activities)) {
+    const regionExercises = program.splitDays
+      .flatMap(d => d.exercises)
+      .filter(e => getExerciseRegions(findExercise(e.exerciseId)).has(region));
+    if (!regionExercises.length) continue;
+
+    const exerciseIds = [...new Set(regionExercises.map(e => e.exerciseId))];
+    const signal = getRegionStrainSignal(exerciseIds, allSessions, threshold);
+    if (!signal) continue;
+
+    const regionName = REGION_LABELS[region].toLowerCase();
+    const names = exerciseIds.map(id => findExercise(id)?.name).filter(Boolean);
+    const symptom = signal.stalled.length && signal.rpeClimbing
+      ? 'stalling while RPE climbs'
+      : signal.stalled.length ? 'stalling' : 'feeling harder (RPE climbing)';
+    const signalData = [
+      signal.stalled.length ? `Stalled: ${signal.stalled.map(id => findExercise(id)?.name).filter(Boolean).join(', ')}` : null,
+      signal.rpeClimbing ? `RPE ${signal.rpeFrom.toFixed(1)} → ${signal.rpeTo.toFixed(1)}` : null,
+    ].filter(Boolean).join(' · ');
+
+    recommendations.push({
+      id: `external-load-${region}`,
+      type: REC_TYPES.EXTERNAL_LOAD_FLAG,
+      severity: SEVERITY.NORMAL,
+      exerciseId: null,
+      dayLabel: null,
+      region,
+      title: `Outside activity is competing with your ${regionName} training`,
+      description: `You've logged heavy ${regionName} activity outside the gym two weeks running, and your ${REGION_BODY_WORDS[region]} lifts are ${symptom}. That's recovery being shared between your sport and your lifting — not a sign the exercises are wrong, so swapping them won't fix it. For the next 2–3 weeks, drop one set from each ${regionName} exercise (${names.join(', ')}) and keep the same RPE targets. Add the sets back once your outside load eases or the lifts start moving again.`,
+      guideRule: 'First identify if the issues even stem from your programming. Outside training draws on the same recovery — reduce lifting volume for the affected muscles before changing exercises.',
+      actionLabel: null,
+      actionType: null,
+      dataPoint: `Outside load: ${lastWeek} last week · ${thisWeek} this week (heavy is ${HEAVY_WEEK_LOAD}+; minutes × intensity) · ${signalData}`,
+      generatedAt: new Date().toISOString(),
+    });
+  }
+
+  return recommendations;
+}
+
 // ─── Rule 2: Progress stalls ─────────────────────────────────────────────────
 const TRAINING_AGE_PROGRESS_CONTEXT = {
   [TRAINING_AGE.BEGINNER]:     'As a beginner, you should progress most sessions — a stall this early likely means a quick fix is needed.',
@@ -592,7 +708,7 @@ const TRAINING_AGE_PROGRESS_CONTEXT = {
   [TRAINING_AGE.ADVANCED]:     'Advanced lifters progress slowly by nature. A stall over this window is meaningful and warrants a deliberate change.',
 };
 
-function checkProgressStalls(program, allSessions, checkIns, exerciseTrends, jointActionMetrics) {
+function checkProgressStalls(program, allSessions, checkIns, exerciseTrends, jointActionMetrics, externalLoadRegions = new Set()) {
   const recommendations = [];
   const threshold = getPlateauThreshold(program.trainingAge, program.age);
   const progressContext = TRAINING_AGE_PROGRESS_CONTEXT[program.trainingAge] || '';
@@ -632,9 +748,12 @@ function checkProgressStalls(program, allSessions, checkIns, exerciseTrends, joi
         }));
       };
 
-      // Exclude poor-sleep sessions from the "last e1RM" comparison — a bad-sleep
-      // session is not a reliable measure of actual progress.
-      const reliableSessions = window.filter(s => getSleepWeight(s) > 0);
+      // Exclude poor-sleep sessions — and sessions right after hard outside activity
+      // that loaded this exercise's muscles — from the "last e1RM" comparison.
+      // Neither is a reliable measure of actual progress.
+      const reliableSessions = window.filter(s =>
+        getSleepWeight(s) > 0 && !isExerciseExternallyFatigued(_activities, s.date, exDef)
+      );
       // If fewer than half the window has reliable sleep data, defer the stall check.
       if (reliableSessions.length < Math.ceil(threshold / 2)) continue;
 
@@ -653,6 +772,9 @@ function checkProgressStalls(program, allSessions, checkIns, exerciseTrends, joi
 
       // 1. Fatigue — suppress individual recs, global flag handles it
       if (fatigueIsIssue) continue;
+
+      // 1b. Outside activity — the external-load rec already covers this region
+      if ([...getExerciseRegions(exDef)].some(r => externalLoadRegions.has(r))) continue;
 
       // 2. Nutrition
       if (nutritionIsIssue) {
@@ -976,13 +1098,15 @@ async function calculateExerciseTrends(program, allSessions) {
 
 // ─── Main engine runner ───────────────────────────────────────────────────────
 export async function runAdjustmentEngine() {
-  const [program, allSessions, checkIns, customExercises] = await Promise.all([
+  const [program, allSessions, checkIns, customExercises, activities] = await Promise.all([
     getCurrentProgram(),
     getAllSessions(),
     getAllCheckIns(),
     getCustomExercises(),
+    getActivityLog(),
   ]);
   _customExercises = customExercises;
+  _activities = activities || [];
 
   if (!program) {
     return { recommendations: [], exerciseTrends: [], jointActionMetrics: {}, program: null, summary: null };
@@ -1012,8 +1136,12 @@ export async function runAdjustmentEngine() {
       if (nutritionRec) recommendations.push(nutritionRec);
     }
 
+    const externalLoadRecs = checkExternalLoad(program, allSessions);
+    recommendations.push(...externalLoadRecs);
+    const externalLoadRegions = new Set(externalLoadRecs.map(r => r.region));
+
     recommendations.push(...checkJointActionVolume(program, allSessions, jointActionMetrics));
-    recommendations.push(...checkProgressStalls(program, allSessions, checkIns, exerciseTrends, jointActionMetrics));
+    recommendations.push(...checkProgressStalls(program, allSessions, checkIns, exerciseTrends, jointActionMetrics, externalLoadRegions));
     recommendations.push(...checkRPEAdjustments(program, allSessions));
     recommendations.push(...checkExerciseOrderOptimization(program, exerciseTrends));
 

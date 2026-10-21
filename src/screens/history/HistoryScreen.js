@@ -7,8 +7,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../../theme/ThemeContext';
 import { spacing, fontSizes, borderRadius } from '../../theme';
-import { getAllSessions, getCustomExercises, deleteSession } from '../../services/storage';
+import { getAllSessions, getCustomExercises, deleteSession, getActivityLog } from '../../services/storage';
 import { exercises as builtInExercises } from '../../data/exercises';
+import { getActivityType, getActivityLabel, INTENSITY_OPTIONS } from '../../data/activities';
+import ActivityLogModal from '../../components/common/ActivityLogModal';
 import { groupSessionsByMonth, weekdayShort, dayOfMonth } from '../../utils/dateHelpers';
 import { getDurationMinutes, formatDuration } from '../../utils/workoutHelpers';
 
@@ -17,15 +19,20 @@ export default function HistoryScreen({ navigation }) {
   const styles = makeStyles(colors);
 
   const [sessions, setSessions] = useState([]);
+  const [activities, setActivities] = useState([]);
   const [exerciseMap, setExerciseMap] = useState({});
   const [loading, setLoading] = useState(true);
+  const [editingActivity, setEditingActivity] = useState(null);
 
   const load = useCallback(async () => {
-    const [allSessions, custom] = await Promise.all([getAllSessions(), getCustomExercises()]);
+    const [allSessions, custom, activityLog] = await Promise.all([
+      getAllSessions(), getCustomExercises(), getActivityLog(),
+    ]);
     const map = {};
     [...builtInExercises, ...custom].forEach(e => { map[e.id] = e.name; });
     setExerciseMap(map);
     setSessions(allSessions);
+    setActivities(activityLog);
     setLoading(false);
   }, []);
 
@@ -58,7 +65,10 @@ export default function HistoryScreen({ navigation }) {
     );
   }
 
-  const grouped = groupSessionsByMonth(sessions);
+  const grouped = groupSessionsByMonth([
+    ...sessions.map(s => ({ ...s, kind: 'session' })),
+    ...activities.map(a => ({ ...a, kind: 'activity' })),
+  ]);
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -69,7 +79,7 @@ export default function HistoryScreen({ navigation }) {
       >
         <Text style={styles.screenTitle}>History</Text>
 
-        {sessions.length === 0 ? (
+        {sessions.length === 0 && activities.length === 0 ? (
           <View style={styles.empty}>
             <Text style={styles.emptyTitle}>No workouts yet</Text>
             <Text style={styles.emptyBody}>
@@ -82,11 +92,50 @@ export default function HistoryScreen({ navigation }) {
               <View style={styles.monthHeader}>
                 <Text style={styles.monthLabel}>{group.label}</Text>
                 <Text style={styles.monthCount}>
-                  {group.sessions.length} workout{group.sessions.length !== 1 ? 's' : ''}
+                  {monthCountLabel(group.sessions)}
                 </Text>
               </View>
 
-              {group.sessions.map(session => {
+              {group.sessions.map(item => {
+                if (item.kind === 'activity') {
+                  const intensityLabel = INTENSITY_OPTIONS.find(o => o.value === item.intensity)?.label;
+                  return (
+                    <TouchableOpacity
+                      key={item.id}
+                      style={styles.card}
+                      activeOpacity={0.7}
+                      onPress={() => setEditingActivity(item)}
+                    >
+                      <View style={styles.cardHeader}>
+                        <View style={styles.dateBadge}>
+                          <Text style={styles.dateBadgeDay}>{weekdayShort(item.date)}</Text>
+                          <Text style={styles.dateBadgeNum}>{dayOfMonth(item.date)}</Text>
+                        </View>
+                        <View style={styles.cardBody}>
+                          <View style={styles.cardTitleRow}>
+                            <View style={styles.activityTitleRow}>
+                              <Ionicons
+                                name={getActivityType(item.type)?.icon || 'pulse'}
+                                size={15}
+                                color={colors.primary}
+                              />
+                              <Text style={styles.cardTitle} numberOfLines={1}>{getActivityLabel(item)}</Text>
+                            </View>
+                            <Text style={styles.cardDuration}>{formatDuration(item.durationMinutes)}</Text>
+                          </View>
+                          <Text style={styles.exerciseLine}>
+                            Outside activity{intensityLabel ? ` · ${intensityLabel}` : ''}
+                          </Text>
+                          {!!item.note && (
+                            <Text style={styles.exerciseLine} numberOfLines={2}>{item.note}</Text>
+                          )}
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                }
+
+                const session = item;
                 const duration = getDurationMinutes(session.startTime, session.endTime);
                 const dayName = session.splitDayDisplayName || session.splitDayLabel;
                 return (
@@ -131,8 +180,24 @@ export default function HistoryScreen({ navigation }) {
           ))
         )}
       </ScrollView>
+
+      <ActivityLogModal
+        visible={!!editingActivity}
+        editActivity={editingActivity}
+        onClose={() => setEditingActivity(null)}
+        onSaved={load}
+      />
     </SafeAreaView>
   );
+}
+
+function monthCountLabel(items) {
+  const workouts = items.filter(i => i.kind === 'session').length;
+  const outside = items.length - workouts;
+  const parts = [];
+  if (workouts) parts.push(`${workouts} workout${workouts !== 1 ? 's' : ''}`);
+  if (outside) parts.push(`${outside} activit${outside !== 1 ? 'ies' : 'y'}`);
+  return parts.join(' · ');
 }
 
 const makeStyles = (colors) => StyleSheet.create({
@@ -173,6 +238,7 @@ const makeStyles = (colors) => StyleSheet.create({
     marginBottom: spacing.xs,
   },
   cardTitle: { flex: 1, fontSize: fontSizes.md, fontWeight: '700', color: colors.text },
+  activityTitleRow: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 },
   cardDuration: { fontSize: fontSizes.sm, color: colors.textTertiary, fontWeight: '600', marginLeft: spacing.sm },
   exerciseLine: { fontSize: fontSizes.sm, color: colors.textSecondary, lineHeight: 22 },
   exerciseSets: { color: colors.text, fontWeight: '600' },

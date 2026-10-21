@@ -7,13 +7,15 @@ jest.mock('../../../src/services/storage', () => ({
   getAllSessions: jest.fn(),
   getAllCheckIns: jest.fn(),
   getCustomExercises: jest.fn(),
+  getActivityLog: jest.fn(),
 }));
 
-function setStorageMocks({ program, sessions = [], checkIns = [], customExercises = [] }) {
+function setStorageMocks({ program, sessions = [], checkIns = [], customExercises = [], activities = [] }) {
   storage.getCurrentProgram.mockResolvedValue(program);
   storage.getAllSessions.mockResolvedValue(sessions);
   storage.getAllCheckIns.mockResolvedValue(checkIns);
   storage.getCustomExercises.mockResolvedValue(customExercises);
+  storage.getActivityLog.mockResolvedValue(activities);
 }
 
 // ─── No program ───────────────────────────────────────────────────────────────
@@ -481,5 +483,86 @@ describe('calculateJointActionMetrics', () => {
 
     expect(pressMetrics?.isFullyProgressing).toBe(true);
     expect(pressMetrics?.isFullyStalling).toBe(false);
+  });
+});
+
+// ─── Outside activity ─────────────────────────────────────────────────────────
+describe('outside activity — Block 4', () => {
+  const HOUR = 60 * 60 * 1000;
+  const dates = [
+    '2026-01-01T10:00:00.000Z', '2026-01-08T10:00:00.000Z',
+    '2026-01-15T10:00:00.000Z', '2026-01-22T10:00:00.000Z',
+  ];
+  const flat = (exerciseId, weights = [100, 100, 101, 100]) =>
+    weights.map((w, i) =>
+      makeSession(exerciseId, [{ weight: String(w), reps: '1', rpe: 8, completedAt: dates[i] }], dates[i])
+    );
+  const hardSoccer = date => ({
+    id: `a-${date}`, date, type: 'soccer', region: 'lower', durationMinutes: 90, intensity: 3,
+  });
+
+  // Two heavy weeks ending now: one 90-min hard session this week, one last week.
+  function heavyRecentLowerLoad() {
+    const now = Date.now();
+    const day = new Date(now).getDay();
+    const daysSinceMonday = (day + 6) % 7;
+    const monday = new Date(now);
+    monday.setHours(0, 0, 0, 0);
+    monday.setDate(monday.getDate() - daysSinceMonday);
+    const thisWeek = new Date(Math.max(monday.getTime(), now - 60 * 1000)).toISOString();
+    const lastWeek = new Date(monday.getTime() - 3 * 24 * HOUR).toISOString();
+    return [hardSoccer(thisWeek), hardSoccer(lastWeek)];
+  }
+
+  const stallTypes = [REC_TYPES.PROGRESS_STALL, REC_TYPES.INCREASE_VOLUME, REC_TYPES.LOWER_REP_RANGE];
+
+  it('flags a lower-body stall when there is no outside activity (control)', async () => {
+    setStorageMocks({
+      program: makeProgram({ currentBlock: 4, trainingAge: 'intermediate' }),
+      sessions: flat('hack_squat'),
+      checkIns: [makeCheckIn(3, '2026-01-19')],
+    });
+    const result = await runAdjustmentEngine();
+    expect(result.recommendations.some(r => r.exerciseId === 'hack_squat' && stallTypes.includes(r.type))).toBe(true);
+  });
+
+  it('discounts lower-body sessions that follow hard outside activity, deferring the stall', async () => {
+    const activities = dates.slice(1).map(d => hardSoccer(new Date(new Date(d).getTime() - 24 * HOUR).toISOString()));
+    setStorageMocks({
+      program: makeProgram({ currentBlock: 4, trainingAge: 'intermediate' }),
+      sessions: flat('hack_squat'),
+      checkIns: [makeCheckIn(3, '2026-01-19')],
+      activities,
+    });
+    const result = await runAdjustmentEngine();
+    expect(result.recommendations.some(r => r.exerciseId === 'hack_squat' && stallTypes.includes(r.type))).toBe(false);
+  });
+
+  it('raises an external-load rec instead of stall recs when outside load is heavy two weeks running', async () => {
+    setStorageMocks({
+      program: makeProgram({ currentBlock: 4, trainingAge: 'intermediate' }),
+      sessions: [...flat('hack_squat'), ...flat('incline_smith_press')],
+      checkIns: [makeCheckIn(3, '2026-01-19')],
+      activities: heavyRecentLowerLoad(),
+    });
+    const { recommendations } = await runAdjustmentEngine();
+
+    const external = recommendations.find(r => r.type === REC_TYPES.EXTERNAL_LOAD_FLAG);
+    expect(external).toBeDefined();
+    expect(external.region).toBe('lower');
+    expect(recommendations.some(r => r.exerciseId === 'hack_squat' && stallTypes.includes(r.type))).toBe(false);
+    // Upper body isn't affected by soccer — its stall still surfaces normally
+    expect(recommendations.some(r => r.exerciseId === 'incline_smith_press' && stallTypes.includes(r.type))).toBe(true);
+  });
+
+  it('does not raise an external-load rec when lifts in that region are still progressing', async () => {
+    setStorageMocks({
+      program: makeProgram({ currentBlock: 4, trainingAge: 'intermediate' }),
+      sessions: flat('hack_squat', [100, 103, 106, 110]),
+      checkIns: [makeCheckIn(3, '2026-01-19')],
+      activities: heavyRecentLowerLoad(),
+    });
+    const { recommendations } = await runAdjustmentEngine();
+    expect(recommendations.find(r => r.type === REC_TYPES.EXTERNAL_LOAD_FLAG)).toBeUndefined();
   });
 });

@@ -27,6 +27,7 @@ export default function AdjustmentDetailScreen({ navigation, route }) {
     [REC_TYPES.INCREASE_VOLUME]:            'Volume increase — add a set',
     [REC_TYPES.REDUCE_JOINT_ACTION_VOLUME]: 'Joint action overloaded → reduce sets',
     [REC_TYPES.REORDER_EXERCISE]:           'Session order → prioritize this movement',
+    [REC_TYPES.EXTERNAL_LOAD_FLAG]:         'Lifestyle factor — outside activity',
   }[rec.type] || 'Recommendation';
 
   return (

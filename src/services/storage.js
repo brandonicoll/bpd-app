@@ -15,6 +15,7 @@ export const KEYS = {
   WEIGHT_UNIT: 'weightUnit',
   DRAFT_SESSION: 'draftSession',
   PROGRESS_PHOTOS: 'progressPhotos',
+  ACTIVITY_LOG: 'activityLog',
 };
 
 // ─── Generic helpers ───────────────────────────────────────────
@@ -272,6 +273,31 @@ export async function updateAdjustmentStatus(id, status) {
     return setItem(KEYS.ADJUSTMENT_LOG, log);
   }
   return false;
+}
+
+// ─── Outside activity log (sport / cardio) ─────────────────────
+// Shape: [{ id, date, type, customLabel, region ('lower'|'upper'|'full'),
+//           durationMinutes, intensity (1 easy | 2 moderate | 3 hard), note, createdAt, updatedAt }]
+export async function getActivityLog() {
+  const log = await getItem(KEYS.ACTIVITY_LOG);
+  return log || [];
+}
+
+export async function saveActivity(activity) {
+  const log = await getActivityLog();
+  const idx = log.findIndex(a => a.id === activity.id);
+  const entry = { ...activity, updatedAt: new Date().toISOString() };
+  if (idx >= 0) {
+    log[idx] = entry;
+  } else {
+    log.push(entry);
+  }
+  return setItem(KEYS.ACTIVITY_LOG, log);
+}
+
+export async function deleteActivity(id) {
+  const log = await getActivityLog();
+  return setItem(KEYS.ACTIVITY_LOG, log.filter(a => a.id !== id));
 }
 
 // ─── Progress helpers ─────────────────────────────────────────

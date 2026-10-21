@@ -16,10 +16,11 @@ import { useTheme } from '../../theme/ThemeContext';
 import { useHomeData, getNextSession } from '../../hooks/useHomeData';
 import ProgressRing from '../../components/common/ProgressRing';
 import WeeklyCheckIn from '../../components/home/WeeklyCheckIn';
-import { getGreeting, formatDateFriendly } from '../../utils/dateHelpers';
+import ActivityLogModal from '../../components/common/ActivityLogModal';
+import { getGreeting, formatDateFriendly, isThisWeek } from '../../utils/dateHelpers';
 import { getCurrentBlockInfo } from '../../services/programEngine';
 import { presentCustomerCenter, } from '../../services/purchases';
-import { clearAllData } from '../../services/storage';
+import { clearAllData, getActivityLog } from '../../services/storage';
 
 export default function HomeScreen({ navigation }) {
   const { colors } = useTheme();
@@ -36,12 +37,20 @@ export default function HomeScreen({ navigation }) {
   } = useHomeData();
 
   const [refreshing, setRefreshing] = React.useState(false);
+  const [showActivityLog, setShowActivityLog] = React.useState(false);
+  const [activitiesThisWeek, setActivitiesThisWeek] = React.useState(0);
+
+  const loadActivityCount = React.useCallback(async () => {
+    const log = await getActivityLog();
+    setActivitiesThisWeek(log.filter(a => isThisWeek(a.date)).length);
+  }, []);
 
   // Re-fetch whenever the tab comes back into focus (e.g. after logging a workout)
   useFocusEffect(
     React.useCallback(() => {
       refresh();
-    }, [refresh])
+      loadActivityCount();
+    }, [refresh, loadActivityCount])
   );
 
   async function handleRefresh() {
@@ -208,6 +217,26 @@ export default function HomeScreen({ navigation }) {
           </View>
         )}
 
+        {/* ── Outside activity log ── */}
+        <TouchableOpacity
+          style={styles.activityCard}
+          activeOpacity={0.7}
+          onPress={() => setShowActivityLog(true)}
+        >
+          <View style={styles.activityIcon}>
+            <Ionicons name="pulse" size={18} color={colors.primary} />
+          </View>
+          <View style={styles.activityText}>
+            <Text style={styles.activityTitle}>Log outside activity</Text>
+            <Text style={styles.activitySubtitle}>
+              {activitiesThisWeek > 0
+                ? `${activitiesThisWeek} logged this week`
+                : 'Sport or cardio — helps coaching read your recovery'}
+            </Text>
+          </View>
+          <Ionicons name="add-circle-outline" size={22} color={colors.primary} />
+        </TouchableOpacity>
+
         {/* ── Nutrition check-in (if not done this week) ── */}
         {showNutritionCheckIn && (
           <WeeklyCheckIn onComplete={refresh} />
@@ -245,6 +274,12 @@ export default function HomeScreen({ navigation }) {
           <Text style={styles.manageSubText}>Manage subscription</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      <ActivityLogModal
+        visible={showActivityLog}
+        onClose={() => setShowActivityLog(false)}
+        onSaved={loadActivityCount}
+      />
     </SafeAreaView>
   );
 }
@@ -269,6 +304,40 @@ const makeStyles = (colors) => StyleSheet.create({
   emptyText: {
     fontSize: fontSizes.sm,
     color: colors.textSecondary,
+  },
+
+  // Outside activity
+  activityCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    gap: spacing.md,
+  },
+  activityIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  activityText: {
+    flex: 1,
+  },
+  activityTitle: {
+    fontSize: fontSizes.md,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  activitySubtitle: {
+    fontSize: fontSizes.xs,
+    color: colors.textSecondary,
+    marginTop: 2,
   },
 
   // Header

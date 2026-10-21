@@ -18,7 +18,10 @@ import {
   saveDraftSession,
   clearDraftSession,
   getCustomExercises,
+  getActivityLog,
 } from '../../services/storage';
+import { getWorkoutHeadsUp } from '../../services/activityLoad';
+import { getActivityLabel, INTENSITY_OPTIONS, REGION_BODY_WORDS } from '../../data/activities';
 import CustomExerciseModal from '../../components/common/CustomExerciseModal';
 import { exercises as exerciseLibrary } from '../../data/exercises';
 import {
@@ -587,6 +590,7 @@ export default function ActiveWorkoutScreen({ navigation, route }) {
   const createCustomContextRef = useRef(null);
   const [customExercises, setCustomExercises] = useState([]);
   const [showCreateCustom, setShowCreateCustom] = useState(false);
+  const [headsUpActivity, setHeadsUpActivity] = useState(null);
 
   const allExercises = useMemo(
     () => [...exerciseLibrary, ...customExercises],
@@ -615,8 +619,12 @@ export default function ActiveWorkoutScreen({ navigation, route }) {
 
   useEffect(() => {
     async function load() {
-      const custom = await getCustomExercises();
+      const [custom, activities] = await Promise.all([getCustomExercises(), getActivityLog()]);
       setCustomExercises(custom);
+      const dayDefs = splitDay.exercises
+        .map(e => [...exerciseLibrary, ...custom].find(def => def.id === e.exerciseId))
+        .filter(Boolean);
+      setHeadsUpActivity(getWorkoutHeadsUp(activities, dayDefs));
       await loadPreviousData(splitDay.exercises.map(e => e.exerciseId));
     }
     load();
@@ -981,6 +989,18 @@ export default function ActiveWorkoutScreen({ navigation, route }) {
           keyboardShouldPersistTaps="handled"
           automaticallyAdjustKeyboardInsets={true}
         >
+          {headsUpActivity && (
+            <View style={styles.headsUp}>
+              <Ionicons name="information-circle-outline" size={18} color={colors.primary} style={styles.headsUpIcon} />
+              <Text style={styles.headsUpText}>
+                {`${INTENSITY_OPTIONS.find(o => o.value === headsUpActivity.intensity)?.label || ''} ${getActivityLabel(headsUpActivity).toLowerCase()} ${relativeDateLabel(headsUpActivity.date).toLowerCase()} — your ${REGION_BODY_WORDS[headsUpActivity.region]} may feel heavier today. Lifts for those muscles won't count against your progress if they feel off.`.trim()}
+              </Text>
+              <TouchableOpacity onPress={() => setHeadsUpActivity(null)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <Ionicons name="close" size={16} color={colors.textTertiary} />
+              </TouchableOpacity>
+            </View>
+          )}
+
           {sessionExercises.map((exData, exIndex) => {
             const exDef = allExercises.find(e => e.id === exData.exerciseId);
             if (!exDef) return null;
@@ -1106,6 +1126,13 @@ const makeStyles = (colors) => StyleSheet.create({
   restTimerValue: { fontSize: fontSizes.md, fontWeight: '700', color: colors.text, fontVariant: ['tabular-nums'] },
   scroll: { flex: 1 },
   scrollContent: { padding: spacing.lg, paddingBottom: spacing.xxl },
+  headsUp: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm,
+    backgroundColor: colors.primaryLight, borderRadius: borderRadius.md,
+    padding: spacing.md, marginBottom: spacing.md,
+  },
+  headsUpIcon: { marginTop: 1 },
+  headsUpText: { flex: 1, fontSize: fontSizes.sm, color: colors.text, lineHeight: 19 },
   addExerciseBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
     paddingVertical: 13, borderWidth: 1.5, borderColor: colors.primary,
