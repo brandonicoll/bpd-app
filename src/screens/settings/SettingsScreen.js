@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Switch, SafeAreaView, ScrollView, TouchableOpacity, ActionSheetIOS, Platform, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Switch, SafeAreaView, ScrollView, TouchableOpacity, ActionSheetIOS, Platform, Alert, ActivityIndicator, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/ThemeContext';
 import { spacing, fontSizes, borderRadius } from '../../theme';
@@ -7,6 +7,9 @@ import { getCurrentProgram, updateTrainingAge } from '../../services/storage';
 import { exportBackup, pickAndValidateBackup, restoreBackup } from '../../services/backup';
 import { TRAINING_AGE } from '../../data/splits';
 import { useWeightUnit } from '../../context/WeightUnitContext';
+import { useSubscription } from '../../context/SubscriptionContext';
+import { presentCustomerCenter, restorePurchases } from '../../services/purchases';
+import { PRIVACY_POLICY_URL, TERMS_OF_USE_URL } from '../../services/proAccess';
 
 const TRAINING_AGE_OPTIONS = [
   { value: TRAINING_AGE.BEGINNER,     label: 'Beginner',     subtitle: '0–1 years — learning movements, building base strength' },
@@ -21,6 +24,8 @@ export default function SettingsScreen({ navigation }) {
   const [trainingAge, setTrainingAge] = useState(null);
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [restoring, setRestoring] = useState(false);
+  const { isSubscribed, refresh } = useSubscription();
 
   useEffect(() => {
     getCurrentProgram().then(p => {
@@ -76,6 +81,20 @@ export default function SettingsScreen({ navigation }) {
       console.error('pickAndValidateBackup error:', e);
       Alert.alert('Import failed', e.message || 'Could not read that file.');
       setImporting(false);
+    }
+  }
+
+  async function handleRestore() {
+    setRestoring(true);
+    const result = await restorePurchases();
+    await refresh();
+    setRestoring(false);
+    if (result.success) {
+      Alert.alert('Pro restored', 'Your BPF Pro subscription is active on this device.');
+    } else if (result.error) {
+      Alert.alert('Restore failed', 'Could not reach the App Store. Please try again.');
+    } else {
+      Alert.alert('Nothing to restore', 'No active BPF Pro subscription was found for this Apple ID.');
     }
   }
 
@@ -200,6 +219,40 @@ export default function SettingsScreen({ navigation }) {
         </View>
 
         <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Subscription</Text>
+          {isSubscribed ? (
+            <TouchableOpacity style={styles.row} onPress={presentCustomerCenter} activeOpacity={0.7}>
+              <View style={styles.rowLeft}>
+                <Text style={styles.rowTitle}>BPF Pro</Text>
+                <Text style={styles.rowSubtitle}>Active — manage or cancel your subscription</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={colors.textTertiary} />
+            </TouchableOpacity>
+          ) : (
+            <>
+              <TouchableOpacity
+                style={[styles.row, styles.rowSpaced]}
+                onPress={() => navigation.navigate('Paywall')}
+                activeOpacity={0.7}
+              >
+                <View style={styles.rowLeft}>
+                  <Text style={styles.rowTitle}>Upgrade to BPF Pro</Text>
+                  <Text style={styles.rowSubtitle}>Personalised recommendations from the adjustment engine</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color={colors.textTertiary} />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.row} onPress={handleRestore} activeOpacity={0.7} disabled={restoring}>
+                <View style={styles.rowLeft}>
+                  <Text style={styles.rowTitle}>Restore purchases</Text>
+                  <Text style={styles.rowSubtitle}>Already subscribed on this Apple ID? Unlock Pro here</Text>
+                </View>
+                {restoring ? <ActivityIndicator color={colors.primary} /> : <Ionicons name="chevron-forward" size={16} color={colors.textTertiary} />}
+              </TouchableOpacity>
+            </>
+          )}
+        </View>
+
+        <View style={styles.section}>
           <Text style={styles.sectionLabel}>Appearance</Text>
           <View style={styles.row}>
             <View style={styles.rowLeft}>
@@ -213,6 +266,26 @@ export default function SettingsScreen({ navigation }) {
               thumbColor="#fff"
             />
           </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Legal</Text>
+          <TouchableOpacity
+            style={[styles.row, styles.rowSpaced]}
+            onPress={() => Linking.openURL(PRIVACY_POLICY_URL)}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.rowTitle}>Privacy Policy</Text>
+            <Ionicons name="open-outline" size={16} color={colors.textTertiary} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.row}
+            onPress={() => Linking.openURL(TERMS_OF_USE_URL)}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.rowTitle}>Terms of Use</Text>
+            <Ionicons name="open-outline" size={16} color={colors.textTertiary} />
+          </TouchableOpacity>
         </View>
       </ScrollView>
     </SafeAreaView>

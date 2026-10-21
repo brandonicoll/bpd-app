@@ -1,5 +1,6 @@
 import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { View, ActivityIndicator } from 'react-native';
 import { colors } from '../theme';
 import { useApp } from '../context/AppContext';
@@ -8,9 +9,11 @@ import OnboardingNavigator from './OnboardingNavigator';
 import MainTabNavigator from './MainTabNavigator';
 import PaywallScreen from '../screens/subscription/PaywallScreen';
 
+const RootStack = createNativeStackNavigator();
+
 export default function RootNavigator() {
   const { hasCompletedOnboarding, isLoading: appLoading } = useApp();
-  const { isSubscribed, isLoading: subLoading } = useSubscription();
+  const { isLoading: subLoading } = useSubscription();
 
   const isLoading = appLoading || subLoading;
 
@@ -30,16 +33,18 @@ export default function RootNavigator() {
     );
   }
 
-  // __DEV__ guard ensures this can never take effect in a production/TestFlight/
-  // App Store build even if EXPO_PUBLIC_SKIP_PAYWALL is left set to 'true' in .env.
-  const skipPaywall = __DEV__ && process.env.EXPO_PUBLIC_SKIP_PAYWALL === 'true';
-  if (!isSubscribed && !skipPaywall) {
-    return <PaywallScreen />;
-  }
-
+  // Tracking is free, so the app is always reachable. The paywall is a modal
+  // opened from Pro features (Insights recommendations, Settings).
   return (
     <NavigationContainer>
-      <MainTabNavigator />
+      <RootStack.Navigator screenOptions={{ headerShown: false }}>
+        <RootStack.Screen name="Main" component={MainTabNavigator} />
+        <RootStack.Screen
+          name="Paywall"
+          component={PaywallScreen}
+          options={{ presentation: 'modal' }}
+        />
+      </RootStack.Navigator>
     </NavigationContainer>
   );
 }

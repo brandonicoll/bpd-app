@@ -20,6 +20,7 @@ import ActivityLogModal from '../../components/common/ActivityLogModal';
 import { getGreeting, formatDateFriendly, isThisWeek } from '../../utils/dateHelpers';
 import { getCurrentBlockInfo } from '../../services/programEngine';
 import { presentCustomerCenter, } from '../../services/purchases';
+import { useSubscription } from '../../context/SubscriptionContext';
 import { clearAllData, getActivityLog } from '../../services/storage';
 
 export default function HomeScreen({ navigation }) {
@@ -35,6 +36,7 @@ export default function HomeScreen({ navigation }) {
     isLoading,
     refresh,
   } = useHomeData();
+  const { isSubscribed } = useSubscription();
 
   const [refreshing, setRefreshing] = React.useState(false);
   const [showActivityLog, setShowActivityLog] = React.useState(false);
@@ -265,14 +267,16 @@ export default function HomeScreen({ navigation }) {
             )}
           </View>
         )}
-        {/* Manage subscription */}
-        <TouchableOpacity
-          onPress={presentCustomerCenter}
-          activeOpacity={0.6}
-          style={styles.manageSubBtn}
-        >
-          <Text style={styles.manageSubText}>Manage subscription</Text>
-        </TouchableOpacity>
+        {/* Manage subscription — free users find Pro in Insights and Settings */}
+        {isSubscribed && (
+          <TouchableOpacity
+            onPress={presentCustomerCenter}
+            activeOpacity={0.6}
+            style={styles.manageSubBtn}
+          >
+            <Text style={styles.manageSubText}>Manage subscription</Text>
+          </TouchableOpacity>
+        )}
       </ScrollView>
 
       <ActivityLogModal

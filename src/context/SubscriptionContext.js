@@ -3,15 +3,24 @@ import { checkSubscriptionStatus } from '../services/purchases';
 
 const SubscriptionContext = createContext(null);
 
-// Beta build: bypasses the paywall for TestFlight testers. Must be set back
-// to false before the app is submitted for full release.
+// Beta build: unlocks Pro for TestFlight testers. Must be set back to false
+// before the app is submitted for full release.
 const BETA_MODE = true;
+
+// Dev only: set EXPO_PUBLIC_FORCE_FREE_TIER=true in .env to preview the free
+// tier locally. The __DEV__ guard keeps it out of TestFlight/App Store builds.
+const FORCE_FREE_TIER = __DEV__ && process.env.EXPO_PUBLIC_FORCE_FREE_TIER === 'true';
 
 export function SubscriptionProvider({ children }) {
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
   const refresh = useCallback(async () => {
+    if (FORCE_FREE_TIER) {
+      setIsSubscribed(false);
+      setIsLoading(false);
+      return;
+    }
     if (BETA_MODE) {
       setIsSubscribed(true);
       setIsLoading(false);

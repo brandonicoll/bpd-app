@@ -9,7 +9,10 @@ import { spacing, fontSizes, borderRadius } from '../../theme';
 import { useTheme } from '../../theme/ThemeContext';
 import { runAdjustmentEngine, SEVERITY, REC_TYPES } from '../../services/adjustmentEngine';
 import { getCurrentBlockInfo } from '../../services/programEngine';
+import { BlurView } from 'expo-blur';
 import { useWeightUnit } from '../../context/WeightUnitContext';
+import { useSubscription } from '../../context/SubscriptionContext';
+import { splitRecsForFreeTier } from '../../services/proAccess';
 
 function TrendIcon({ trend }) {
   const { colors } = useTheme();
@@ -23,14 +26,18 @@ function TrendIcon({ trend }) {
   return <Ionicons name={name} size={16} color={color} />;
 }
 
-function RecommendationCard({ rec, onPress }) {
-  const { colors } = useTheme();
-  const styles = makeStyles(colors);
-  const config = {
+function getSeverityConfig(colors, severity) {
+  return {
     [SEVERITY.URGENT]: { borderColor: colors.danger,  bg: colors.dangerLight,  iconName: 'alert-circle',        iconColor: colors.danger },
     [SEVERITY.NORMAL]: { borderColor: colors.warning, bg: colors.warningLight, iconName: 'bulb',                iconColor: colors.warning },
     [SEVERITY.INFO]:   { borderColor: colors.primary, bg: colors.primaryLight, iconName: 'information-circle',  iconColor: colors.primary },
-  }[rec.severity] || { borderColor: colors.border, bg: colors.surface, iconName: 'ellipse', iconColor: colors.textTertiary };
+  }[severity] || { borderColor: colors.border, bg: colors.surface, iconName: 'ellipse', iconColor: colors.textTertiary };
+}
+
+function RecommendationCard({ rec, onPress }) {
+  const { colors } = useTheme();
+  const styles = makeStyles(colors);
+  const config = getSeverityConfig(colors, rec.severity);
 
   return (
     <TouchableOpacity
@@ -52,6 +59,96 @@ function RecommendationCard({ rec, onPress }) {
         <Text style={styles.recActionLabel}>{rec.actionLabel}</Text>
       )}
     </TouchableOpacity>
+  );
+}
+
+// Free tier: title and a one-line teaser are visible, the data and the fix are locked.
+function LockedRecommendationCard({ rec, onPress }) {
+  const { colors } = useTheme();
+  const styles = makeStyles(colors);
+  const config = getSeverityConfig(colors, rec.severity);
+
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      activeOpacity={0.75}
+      style={[styles.recCard, { borderLeftColor: config.borderColor, backgroundColor: config.bg }]}
+    >
+      <View style={styles.recHeader}>
+        <Ionicons name={config.iconName} size={18} color={config.iconColor} style={{ marginTop: 1 }} />
+        <Text style={styles.recTitle} numberOfLines={2}>{rec.title}</Text>
+      </View>
+      <Text style={[styles.recDescription, styles.recDescriptionFaded]} numberOfLines={1}>{rec.description}</Text>
+      <View style={styles.lockRow}>
+        <Ionicons name="lock-closed" size={13} color={colors.primary} />
+        <Text style={styles.lockText}>See why and what to change with Pro</Text>
+      </View>
+    </TouchableOpacity>
+  );
+}
+
+// Free tier: the whole card is blurred behind a Pro lock.
+function BlurredRecommendationCard({ rec, onPress }) {
+  const { colors, isDark } = useTheme();
+  const styles = makeStyles(colors);
+  const config = getSeverityConfig(colors, rec.severity);
+
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      activeOpacity={0.75}
+      style={[styles.recCard, styles.blurredCard, { borderLeftColor: config.borderColor, backgroundColor: config.bg }]}
+    >
+      <View style={styles.recHeader}>
+        <Ionicons name={config.iconName} size={18} color={config.iconColor} style={{ marginTop: 1 }} />
+        <Text style={styles.recTitle} numberOfLines={1}>{rec.title}</Text>
+      </View>
+      <Text style={styles.recDescription} numberOfLines={2}>{rec.description}</Text>
+      <BlurView
+        intensity={28}
+        tint={isDark ? 'dark' : 'light'}
+        experimentalBlurMethod="dimezisBlurView"
+        style={StyleSheet.absoluteFill}
+      />
+      <View style={styles.blurOverlay}>
+        <View style={styles.proPill}>
+          <Ionicons name="lock-closed" size={12} color="#fff" />
+          <Text style={styles.proPillText}>Pro</Text>
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+}
+
+// Free tier with nothing real to tease yet: an example of what Pro surfaces.
+function ProPreviewCard({ hasRealRecs, onPress }) {
+  const { colors } = useTheme();
+  const styles = makeStyles(colors);
+  const example = {
+    severity: SEVERITY.NORMAL,
+    title: 'Example: Hack Squat has stalled for 3 sessions',
+    description: 'Your estimated 1RM has moved less than 2.5% while RPE keeps climbing. Swap to a pendulum squat for the next cycle.',
+  };
+
+  return (
+    <View style={styles.proCard}>
+      <View style={styles.proCardHeader}>
+        <View style={styles.proBadge}>
+          <Ionicons name="sparkles" size={12} color={colors.primary} />
+          <Text style={styles.proBadgeText}>BPF PRO</Text>
+        </View>
+      </View>
+      <Text style={styles.proCardTitle}>
+        {hasRealRecs ? 'Unlock all your recommendations' : 'Let the engine coach you'}
+      </Text>
+      <Text style={styles.proCardBody}>
+        Pro analyses your logged sessions — stalls, RPE creep, joint discomfort, sleep, nutrition and outside activity — and tells you exactly what to change, backed by the BPF Programming Guide.
+      </Text>
+      {!hasRealRecs && <BlurredRecommendationCard rec={example} onPress={onPress} />}
+      <TouchableOpacity style={styles.proCta} onPress={onPress} activeOpacity={0.8}>
+        <Text style={styles.proCtaText}>See Pro</Text>
+      </TouchableOpacity>
+    </View>
   );
 }
 
@@ -87,6 +184,7 @@ export default function InsightsScreen({ navigation }) {
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const { weightUnit } = useWeightUnit();
+  const { isSubscribed } = useSubscription();
 
   const load = useCallback(async () => {
     try {
@@ -135,6 +233,10 @@ export default function InsightsScreen({ navigation }) {
   const urgentRecs = recommendations.filter(r => r.severity === SEVERITY.URGENT);
   const normalRecs  = recommendations.filter(r => r.severity !== SEVERITY.URGENT);
   const weeksUntilBlock4 = isOptimizationBlock ? 0 : Math.max(0, 11 - program.currentWeek);
+  const shownNormalRecs = isOptimizationBlock ? normalRecs : [];
+  const freeView = isSubscribed ? null : splitRecsForFreeTier(urgentRecs, shownNormalRecs);
+  const openRec = rec => navigation.navigate('AdjustmentDetail', { recommendation: rec });
+  const openPaywall = () => navigation.navigate('Paywall');
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -223,22 +325,36 @@ export default function InsightsScreen({ navigation }) {
         )}
 
         {/* Urgent recs — always shown */}
-        {urgentRecs.length > 0 && (
+        {isSubscribed && urgentRecs.length > 0 && (
           <>
             <Text style={styles.sectionLabel}>Needs attention</Text>
             {urgentRecs.map(rec => (
-              <RecommendationCard key={rec.id} rec={rec} onPress={r => navigation.navigate('AdjustmentDetail', { recommendation: r })} />
+              <RecommendationCard key={rec.id} rec={rec} onPress={openRec} />
             ))}
           </>
         )}
 
         {/* Block 4: full recommendations */}
-        {isOptimizationBlock && normalRecs.length > 0 && (
+        {isSubscribed && shownNormalRecs.length > 0 && (
           <>
             <Text style={styles.sectionLabel}>Optimization recommendations</Text>
-            {normalRecs.map(rec => (
-              <RecommendationCard key={rec.id} rec={rec} onPress={r => navigation.navigate('AdjustmentDetail', { recommendation: r })} />
+            {shownNormalRecs.map(rec => (
+              <RecommendationCard key={rec.id} rec={rec} onPress={openRec} />
             ))}
+          </>
+        )}
+
+        {/* Free tier: half the recommendations locked, half blurred */}
+        {freeView && freeView.visible.length > 0 && (
+          <>
+            <Text style={styles.sectionLabel}>Recommendations</Text>
+            {freeView.visible.map(rec => (
+              <LockedRecommendationCard key={rec.id} rec={rec} onPress={openPaywall} />
+            ))}
+            {freeView.blurred.map(rec => (
+              <BlurredRecommendationCard key={rec.id} rec={rec} onPress={openPaywall} />
+            ))}
+            <ProPreviewCard hasRealRecs onPress={openPaywall} />
           </>
         )}
 
@@ -271,6 +387,11 @@ export default function InsightsScreen({ navigation }) {
               </Text>
             )}
           </View>
+        )}
+
+        {/* Free tier, nothing real to tease yet: example recommendation */}
+        {freeView && freeView.visible.length === 0 && (
+          <ProPreviewCard hasRealRecs={false} onPress={openPaywall} />
         )}
 
         {/* Exercise progress */}
@@ -433,6 +554,40 @@ const makeStyles = (colors) => StyleSheet.create({
   },
   dataPointText: { fontSize: fontSizes.xs, color: colors.textSecondary, fontWeight: '500' },
   recActionLabel: { fontSize: fontSizes.sm, fontWeight: '700', color: colors.primary },
+  recDescriptionFaded: { opacity: 0.6 },
+  lockRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  lockText: { fontSize: fontSizes.sm, fontWeight: '700', color: colors.primary },
+  blurredCard: { overflow: 'hidden' },
+  blurOverlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
+  proPill: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: colors.primary, borderRadius: borderRadius.full,
+    paddingHorizontal: 12, paddingVertical: 5,
+  },
+  proPillText: { fontSize: fontSizes.xs, fontWeight: '700', color: '#fff' },
+
+  proCard: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.primary + '55',
+  },
+  proCardHeader: { flexDirection: 'row', marginBottom: spacing.sm },
+  proBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: colors.primaryLight, borderRadius: borderRadius.full,
+    paddingHorizontal: 10, paddingVertical: 4,
+  },
+  proBadgeText: { fontSize: 10, fontWeight: '800', color: colors.primary, letterSpacing: 0.8 },
+  proCardTitle: { fontSize: fontSizes.md, fontWeight: '700', color: colors.text, marginBottom: 6 },
+  proCardBody: { fontSize: fontSizes.sm, color: colors.textSecondary, lineHeight: 20, marginBottom: spacing.md },
+  proCta: {
+    backgroundColor: colors.primary, borderRadius: borderRadius.full,
+    paddingVertical: 12, alignItems: 'center',
+  },
+  proCtaText: { fontSize: fontSizes.sm, fontWeight: '700', color: '#fff' },
 
   allGoodCard: {
     flexDirection: 'row',
