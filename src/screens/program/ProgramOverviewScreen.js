@@ -16,6 +16,7 @@ import { getCurrentBlockInfo } from '../../services/programEngine';
 import { exercises as exerciseLibrary, getSwapCandidates } from '../../data/exercises';
 import { JOINT_ACTION_LABELS } from '../../data/jointActionLabels';
 import CustomExerciseModal from '../../components/common/CustomExerciseModal';
+import KeyboardSheet from '../../components/common/KeyboardSheet';
 import ChangeSplitModal from '../../components/program/ChangeSplitModal';
 import DraggableFlatList, { ScaleDecorator } from 'react-native-draggable-flatlist';
 
@@ -27,12 +28,15 @@ function getExercise(id) {
 function SwapModal({ visible, exerciseId, dayLabel, currentBlock, onClose, onSwapped, onCreateCustom, preSelectedId }) {
   const { colors } = useTheme();
   const swapStyles = makeSwapStyles(colors);
+  const addStyles = makeAddStyles(colors);
+  const [query, setQuery] = useState('');
   const [selected, setSelected] = useState(null);
   const [saving, setSaving] = useState(false);
   const [customExercises, setCustomExercises] = useState([]);
 
   useEffect(() => {
     if (visible) {
+      setQuery('');
       setSelected(preSelectedId || null);
       getCustomExercises().then(setCustomExercises);
     }
@@ -47,6 +51,21 @@ function SwapModal({ visible, exerciseId, dayLabel, currentBlock, onClose, onSwa
       )
     : [];
   const candidates = [...builtInCandidates, ...customCandidates];
+
+  // With no query, show only joint-action alternatives. A query searches the
+  // whole library, keeping the matching alternatives at the top.
+  const q = query.trim().toLowerCase();
+  const matchesQuery = ex =>
+    ex.name.toLowerCase().includes(q) ||
+    ex.muscles?.some(m => m.toLowerCase().includes(q));
+  const candidateIds = new Set(candidates.map(c => c.id));
+  const results = q
+    ? [
+        ...candidates.filter(matchesQuery),
+        ...[...exerciseLibrary, ...customExercises.map(e => ({ ...e, isCustom: true }))]
+          .filter(ex => ex.id !== exerciseId && !candidateIds.has(ex.id) && matchesQuery(ex)),
+      ]
+    : candidates;
 
   async function handleConfirm() {
     if (!selected) return;
@@ -83,99 +102,118 @@ function SwapModal({ visible, exerciseId, dayLabel, currentBlock, onClose, onSwa
   }
 
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      transparent
-      onRequestClose={onClose}
-    >
-      <TouchableOpacity style={swapStyles.overlay} onPress={onClose} activeOpacity={1} />
-      <View style={swapStyles.sheet}>
-        {/* Handle */}
-        <View style={swapStyles.handle} />
+    <KeyboardSheet visible={visible} onClose={onClose} sheetStyle={swapStyles.sheet}>
+      {/* Handle */}
+      <View style={swapStyles.handle} />
 
-        <Text style={swapStyles.title}>Swap exercise</Text>
-        {currentEx && (
-          <Text style={swapStyles.subtitle}>
-            Replacing: <Text style={swapStyles.subtitleBold}>{currentEx.name}</Text>
-          </Text>
-        )}
-        <Text style={swapStyles.jointLabel}>
-          Alternatives with matching joint actions
+      <Text style={swapStyles.title}>Swap exercise</Text>
+      {currentEx && (
+        <Text style={swapStyles.subtitle}>
+          Replacing: <Text style={swapStyles.subtitleBold}>{currentEx.name}</Text>
         </Text>
+      )}
 
-        {candidates.length === 0 ? (
-          <Text style={swapStyles.noResults}>No alternative exercises found.</Text>
-        ) : (
-          <FlatList
-            data={candidates}
-            keyExtractor={item => item.id}
-            style={swapStyles.list}
-            showsVerticalScrollIndicator={false}
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                onPress={() => setSelected(item.id)}
-                activeOpacity={0.75}
-                style={[
-                  swapStyles.candidate,
-                  selected === item.id && swapStyles.candidateSelected,
-                ]}
-              >
-                <View style={swapStyles.candidateInfo}>
-                  <Text style={[swapStyles.candidateName, selected === item.id && swapStyles.candidateNameSelected]}>
-                    {item.name}
-                  </Text>
-                  <Text style={swapStyles.candidateMeta}>
-                    {item.isCustom
-                      ? item.jointActions.slice(0, 2).map(j => JOINT_ACTION_LABELS[j] || j).join(' · ')
-                      : `${item.defaultRepRange[0]}–${item.defaultRepRange[1]} reps`
-                    }
-                  </Text>
-                  {item.isCustom && (
-                    <View style={swapStyles.customChip}>
-                      <Text style={swapStyles.customChipText}>Custom</Text>
-                    </View>
-                  )}
-                  {!item.isCustom && item.notes && (
-                    <Text style={swapStyles.candidateNote} numberOfLines={1}>{item.notes}</Text>
-                  )}
-                </View>
-                {selected === item.id && (
-                  <Ionicons name="checkmark" size={20} color={colors.primary} />
-                )}
-              </TouchableOpacity>
-            )}
-          />
+      <View style={addStyles.searchRow}>
+        <Ionicons name="search" size={16} color={colors.textTertiary} style={addStyles.searchIcon} />
+        <TextInput
+          style={addStyles.searchInput}
+          placeholder="Search all exercises by name or muscle…"
+          placeholderTextColor={colors.textTertiary}
+          value={query}
+          onChangeText={setQuery}
+          autoCapitalize="none"
+          autoCorrect={false}
+          returnKeyType="search"
+        />
+        {query.length > 0 && (
+          <TouchableOpacity onPress={() => setQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Ionicons name="close-circle" size={16} color={colors.textTertiary} />
+          </TouchableOpacity>
         )}
-
-        {/* Create custom exercise shortcut */}
-        <TouchableOpacity
-          onPress={() => onCreateCustom?.()}
-          style={swapStyles.createBtn}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="add-circle-outline" size={16} color={colors.primary} />
-          <Text style={swapStyles.createBtnText}>Create custom exercise</Text>
-        </TouchableOpacity>
-
-        <View style={swapStyles.footer}>
-          <TouchableOpacity onPress={onClose} style={swapStyles.cancelBtn} activeOpacity={0.7}>
-            <Text style={swapStyles.cancelText}>Cancel</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={handleConfirm}
-            disabled={!selected || saving}
-            activeOpacity={0.8}
-            style={[swapStyles.confirmBtn, (!selected || saving) && swapStyles.confirmBtnDisabled]}
-          >
-            {saving
-              ? <ActivityIndicator color="#fff" size="small" />
-              : <Text style={swapStyles.confirmText}>Confirm swap</Text>
-            }
-          </TouchableOpacity>
-        </View>
       </View>
-    </Modal>
+
+      <Text style={swapStyles.jointLabel}>
+        {q ? 'Search results' : 'Alternatives with matching joint actions'}
+      </Text>
+
+      {results.length === 0 ? (
+        <Text style={swapStyles.noResults}>
+          {q ? 'No exercises found.' : 'No alternative exercises found. Search to see the full library.'}
+        </Text>
+      ) : (
+        <FlatList
+          data={results}
+          keyExtractor={item => item.id}
+          style={swapStyles.list}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              onPress={() => setSelected(item.id)}
+              activeOpacity={0.75}
+              style={[
+                swapStyles.candidate,
+                selected === item.id && swapStyles.candidateSelected,
+              ]}
+            >
+              <View style={swapStyles.candidateInfo}>
+                <Text style={[swapStyles.candidateName, selected === item.id && swapStyles.candidateNameSelected]}>
+                  {item.name}
+                </Text>
+                <Text style={swapStyles.candidateMeta}>
+                  {item.isCustom
+                    ? item.jointActions.slice(0, 2).map(j => JOINT_ACTION_LABELS[j] || j).join(' · ')
+                    : `${item.defaultRepRange[0]}–${item.defaultRepRange[1]} reps`
+                  }
+                </Text>
+                {item.isCustom && (
+                  <View style={swapStyles.customChip}>
+                    <Text style={swapStyles.customChipText}>Custom</Text>
+                  </View>
+                )}
+                {!item.isCustom && item.notes && (
+                  <Text style={swapStyles.candidateNote} numberOfLines={1}>{item.notes}</Text>
+                )}
+                {!candidateIds.has(item.id) && (
+                  <Text style={swapStyles.candidateNote}>Different joint actions</Text>
+                )}
+              </View>
+              {selected === item.id && (
+                <Ionicons name="checkmark" size={20} color={colors.primary} />
+              )}
+            </TouchableOpacity>
+          )}
+        />
+      )}
+
+      {/* Create custom exercise shortcut */}
+      <TouchableOpacity
+        onPress={() => onCreateCustom?.()}
+        style={swapStyles.createBtn}
+        activeOpacity={0.7}
+      >
+        <Ionicons name="add-circle-outline" size={16} color={colors.primary} />
+        <Text style={swapStyles.createBtnText}>Create custom exercise</Text>
+      </TouchableOpacity>
+
+      <View style={swapStyles.footer}>
+        <TouchableOpacity onPress={onClose} style={swapStyles.cancelBtn} activeOpacity={0.7}>
+          <Text style={swapStyles.cancelText}>Cancel</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={handleConfirm}
+          disabled={!selected || saving}
+          activeOpacity={0.8}
+          style={[swapStyles.confirmBtn, (!selected || saving) && swapStyles.confirmBtnDisabled]}
+        >
+          {saving
+            ? <ActivityIndicator color="#fff" size="small" />
+            : <Text style={swapStyles.confirmText}>Confirm swap</Text>
+          }
+        </TouchableOpacity>
+      </View>
+    </KeyboardSheet>
   );
 }
 
@@ -216,7 +254,7 @@ const makeSwapStyles = (colors) => StyleSheet.create({
     marginBottom: spacing.sm,
   },
   noResults: { fontSize: fontSizes.sm, color: colors.textSecondary, textAlign: 'center', paddingVertical: spacing.lg },
-  list: { maxHeight: 280 },
+  list: { maxHeight: 280, flexShrink: 1 },
   candidate: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -352,102 +390,100 @@ function AddExerciseModal({ visible, dayLabel, existingIds, onClose, onAdded, on
   }
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <TouchableOpacity style={swapStyles.overlay} onPress={onClose} activeOpacity={1} />
-      <View style={addStyles.sheet}>
-        <View style={swapStyles.handle} />
-        <Text style={swapStyles.title}>Add exercise</Text>
-        <Text style={swapStyles.subtitle}>
-          Adding to: <Text style={swapStyles.subtitleBold}>{dayLabel}</Text>
-        </Text>
+    <KeyboardSheet visible={visible} onClose={onClose} sheetStyle={addStyles.sheet}>
+      <View style={swapStyles.handle} />
+      <Text style={swapStyles.title}>Add exercise</Text>
+      <Text style={swapStyles.subtitle}>
+        Adding to: <Text style={swapStyles.subtitleBold}>{dayLabel}</Text>
+      </Text>
 
-        <View style={addStyles.searchRow}>
-          <Ionicons name="search" size={16} color={colors.textTertiary} style={addStyles.searchIcon} />
-          <TextInput
-            style={addStyles.searchInput}
-            placeholder="Search by name or muscle…"
-            placeholderTextColor={colors.textTertiary}
-            value={query}
-            onChangeText={setQuery}
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-          {query.length > 0 && (
-            <TouchableOpacity onPress={() => setQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Ionicons name="close-circle" size={16} color={colors.textTertiary} />
+      <View style={addStyles.searchRow}>
+        <Ionicons name="search" size={16} color={colors.textTertiary} style={addStyles.searchIcon} />
+        <TextInput
+          style={addStyles.searchInput}
+          placeholder="Search by name or muscle…"
+          placeholderTextColor={colors.textTertiary}
+          value={query}
+          onChangeText={setQuery}
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+        {query.length > 0 && (
+          <TouchableOpacity onPress={() => setQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Ionicons name="close-circle" size={16} color={colors.textTertiary} />
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {filtered.length === 0 ? (
+        <Text style={swapStyles.noResults}>No exercises found.</Text>
+      ) : (
+        <FlatList
+          data={filtered}
+          keyExtractor={item => item.id}
+          style={swapStyles.list}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              onPress={() => setSelected(item.id)}
+              activeOpacity={0.75}
+              style={[swapStyles.candidate, selected === item.id && swapStyles.candidateSelected]}
+            >
+              <View style={swapStyles.candidateInfo}>
+                <Text style={[swapStyles.candidateName, selected === item.id && swapStyles.candidateNameSelected]}>
+                  {item.name}
+                </Text>
+                <Text style={swapStyles.candidateMeta}>
+                  {item.isCustom
+                    ? 'Custom exercise'
+                    : `${item.defaultRepRange[0]}–${item.defaultRepRange[1]} reps · RPE ${item.defaultRPE}`}
+                </Text>
+                {!item.isCustom && item.muscles?.length > 0 && (
+                  <Text style={swapStyles.candidateNote} numberOfLines={1}>
+                    {item.muscles.slice(0, 3).join(' · ')}
+                  </Text>
+                )}
+                {item.isCustom && (
+                  <View style={swapStyles.customChip}>
+                    <Text style={swapStyles.customChipText}>Custom</Text>
+                  </View>
+                )}
+              </View>
+              {selected === item.id && (
+                <Ionicons name="checkmark" size={20} color={colors.primary} />
+              )}
             </TouchableOpacity>
           )}
-        </View>
+        />
+      )}
 
-        {filtered.length === 0 ? (
-          <Text style={swapStyles.noResults}>No exercises found.</Text>
-        ) : (
-          <FlatList
-            data={filtered}
-            keyExtractor={item => item.id}
-            style={swapStyles.list}
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                onPress={() => setSelected(item.id)}
-                activeOpacity={0.75}
-                style={[swapStyles.candidate, selected === item.id && swapStyles.candidateSelected]}
-              >
-                <View style={swapStyles.candidateInfo}>
-                  <Text style={[swapStyles.candidateName, selected === item.id && swapStyles.candidateNameSelected]}>
-                    {item.name}
-                  </Text>
-                  <Text style={swapStyles.candidateMeta}>
-                    {item.isCustom
-                      ? 'Custom exercise'
-                      : `${item.defaultRepRange[0]}–${item.defaultRepRange[1]} reps · RPE ${item.defaultRPE}`}
-                  </Text>
-                  {!item.isCustom && item.muscles?.length > 0 && (
-                    <Text style={swapStyles.candidateNote} numberOfLines={1}>
-                      {item.muscles.slice(0, 3).join(' · ')}
-                    </Text>
-                  )}
-                  {item.isCustom && (
-                    <View style={swapStyles.customChip}>
-                      <Text style={swapStyles.customChipText}>Custom</Text>
-                    </View>
-                  )}
-                </View>
-                {selected === item.id && (
-                  <Ionicons name="checkmark" size={20} color={colors.primary} />
-                )}
-              </TouchableOpacity>
-            )}
-          />
-        )}
+      <TouchableOpacity
+        onPress={() => onCreateCustom?.()}
+        style={swapStyles.createBtn}
+        activeOpacity={0.7}
+      >
+        <Ionicons name="add-circle-outline" size={16} color={colors.primary} />
+        <Text style={swapStyles.createBtnText}>Create custom exercise</Text>
+      </TouchableOpacity>
 
-        <TouchableOpacity
-          onPress={() => onCreateCustom?.()}
-          style={swapStyles.createBtn}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="add-circle-outline" size={16} color={colors.primary} />
-          <Text style={swapStyles.createBtnText}>Create custom exercise</Text>
+      <View style={swapStyles.footer}>
+        <TouchableOpacity onPress={onClose} style={swapStyles.cancelBtn} activeOpacity={0.7}>
+          <Text style={swapStyles.cancelText}>Cancel</Text>
         </TouchableOpacity>
-
-        <View style={swapStyles.footer}>
-          <TouchableOpacity onPress={onClose} style={swapStyles.cancelBtn} activeOpacity={0.7}>
-            <Text style={swapStyles.cancelText}>Cancel</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={handleAdd}
-            disabled={!selected || saving}
-            activeOpacity={0.8}
-            style={[swapStyles.confirmBtn, (!selected || saving) && swapStyles.confirmBtnDisabled]}
-          >
-            {saving
-              ? <ActivityIndicator color="#fff" size="small" />
-              : <Text style={swapStyles.confirmText}>Add exercise</Text>}
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity
+          onPress={handleAdd}
+          disabled={!selected || saving}
+          activeOpacity={0.8}
+          style={[swapStyles.confirmBtn, (!selected || saving) && swapStyles.confirmBtnDisabled]}
+        >
+          {saving
+            ? <ActivityIndicator color="#fff" size="small" />
+            : <Text style={swapStyles.confirmText}>Add exercise</Text>}
+        </TouchableOpacity>
       </View>
-    </Modal>
+    </KeyboardSheet>
   );
 }
 
@@ -633,73 +669,69 @@ function EditExerciseConfigModal({ visible, ex, exConfig, dayLabel, onClose, onS
 
   const ecs = makeEditConfigStyles(colors);
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <TouchableOpacity style={ecs.overlay} onPress={onClose} activeOpacity={1} />
-      <View style={ecs.sheet}>
-        <View style={ecs.handle} />
-        <Text style={ecs.title}>{ex?.name}</Text>
-        <Text style={ecs.subtitle}>Sets, rep range & RPE target</Text>
+    <KeyboardSheet visible={visible} onClose={onClose} sheetStyle={ecs.sheet}>
+      <View style={ecs.handle} />
+      <Text style={ecs.title}>{ex?.name}</Text>
+      <Text style={ecs.subtitle}>Sets, rep range & RPE target</Text>
 
-        <Text style={ecs.label}>Sets</Text>
-        <View style={ecs.setsRow}>
-          <TouchableOpacity onPress={() => setSets(v => String(Math.max(1, (parseInt(v)||1) - 1)))} style={ecs.stepper} activeOpacity={0.7}>
-            <Ionicons name="remove" size={22} color={colors.text} />
-          </TouchableOpacity>
-          <Text style={ecs.setsValue}>{sets}</Text>
-          <TouchableOpacity onPress={() => setSets(v => String(Math.min(10, (parseInt(v)||1) + 1)))} style={ecs.stepper} activeOpacity={0.7}>
-            <Ionicons name="add" size={22} color={colors.text} />
-          </TouchableOpacity>
+      <Text style={ecs.label}>Sets</Text>
+      <View style={ecs.setsRow}>
+        <TouchableOpacity onPress={() => setSets(v => String(Math.max(1, (parseInt(v)||1) - 1)))} style={ecs.stepper} activeOpacity={0.7}>
+          <Ionicons name="remove" size={22} color={colors.text} />
+        </TouchableOpacity>
+        <Text style={ecs.setsValue}>{sets}</Text>
+        <TouchableOpacity onPress={() => setSets(v => String(Math.min(10, (parseInt(v)||1) + 1)))} style={ecs.stepper} activeOpacity={0.7}>
+          <Ionicons name="add" size={22} color={colors.text} />
+        </TouchableOpacity>
+      </View>
+
+      <Text style={ecs.label}>Rep range</Text>
+      <View style={ecs.repRow}>
+        <View style={ecs.repGroup}>
+          <Text style={ecs.repGroupLabel}>Min</Text>
+          <TextInput
+            style={ecs.repInput} value={repMin} onChangeText={setRepMin}
+            keyboardType="number-pad" maxLength={2}
+            returnKeyType="done" onSubmitEditing={() => Keyboard.dismiss()}
+          />
         </View>
-
-        <Text style={ecs.label}>Rep range</Text>
-        <View style={ecs.repRow}>
-          <View style={ecs.repGroup}>
-            <Text style={ecs.repGroupLabel}>Min</Text>
-            <TextInput
-              style={ecs.repInput} value={repMin} onChangeText={setRepMin}
-              keyboardType="number-pad" maxLength={2}
-              returnKeyType="done" onSubmitEditing={() => Keyboard.dismiss()}
-            />
-          </View>
-          <Text style={ecs.repDash}>–</Text>
-          <View style={ecs.repGroup}>
-            <Text style={ecs.repGroupLabel}>Max</Text>
-            <TextInput
-              style={ecs.repInput} value={repMax} onChangeText={setRepMax}
-              keyboardType="number-pad" maxLength={2}
-              returnKeyType="done" onSubmitEditing={() => Keyboard.dismiss()}
-            />
-          </View>
-        </View>
-
-        <Text style={ecs.label}>Target RPE</Text>
-        <View style={ecs.rpeRow}>
-          {[6,7,8,9,10].map(val => (
-            <TouchableOpacity key={val} onPress={() => setRpe(val)} activeOpacity={0.7}
-              style={[ecs.rpeChip, rpe === val && ecs.rpeChipSelected]}>
-              <Text style={[ecs.rpeChipText, rpe === val && ecs.rpeChipTextSelected]}>{val}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        <Text style={ecs.note}>Rep range and RPE also update this exercise's defaults in the library.</Text>
-
-        <View style={ecs.footer}>
-          <TouchableOpacity onPress={onClose} style={ecs.cancelBtn} activeOpacity={0.7}>
-            <Text style={ecs.cancelText}>Cancel</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={handleSave} disabled={saving} activeOpacity={0.8}
-            style={[ecs.saveBtn, saving && ecs.saveBtnDisabled]}>
-            {saving ? <ActivityIndicator color="#fff" size="small" /> : <Text style={ecs.saveText}>Save</Text>}
-          </TouchableOpacity>
+        <Text style={ecs.repDash}>–</Text>
+        <View style={ecs.repGroup}>
+          <Text style={ecs.repGroupLabel}>Max</Text>
+          <TextInput
+            style={ecs.repInput} value={repMax} onChangeText={setRepMax}
+            keyboardType="number-pad" maxLength={2}
+            returnKeyType="done" onSubmitEditing={() => Keyboard.dismiss()}
+          />
         </View>
       </View>
-    </Modal>
+
+      <Text style={ecs.label}>Target RPE</Text>
+      <View style={ecs.rpeRow}>
+        {[6,7,8,9,10].map(val => (
+          <TouchableOpacity key={val} onPress={() => setRpe(val)} activeOpacity={0.7}
+            style={[ecs.rpeChip, rpe === val && ecs.rpeChipSelected]}>
+            <Text style={[ecs.rpeChipText, rpe === val && ecs.rpeChipTextSelected]}>{val}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      <Text style={ecs.note}>Rep range and RPE also update this exercise's defaults in the library.</Text>
+
+      <View style={ecs.footer}>
+        <TouchableOpacity onPress={onClose} style={ecs.cancelBtn} activeOpacity={0.7}>
+          <Text style={ecs.cancelText}>Cancel</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={handleSave} disabled={saving} activeOpacity={0.8}
+          style={[ecs.saveBtn, saving && ecs.saveBtnDisabled]}>
+          {saving ? <ActivityIndicator color="#fff" size="small" /> : <Text style={ecs.saveText}>Save</Text>}
+        </TouchableOpacity>
+      </View>
+    </KeyboardSheet>
   );
 }
 
 const makeEditConfigStyles = (colors) => StyleSheet.create({
-  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.4)' },
   sheet: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
     backgroundColor: colors.background,

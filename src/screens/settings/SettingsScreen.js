@@ -3,7 +3,8 @@ import { View, Text, StyleSheet, Switch, SafeAreaView, ScrollView, TouchableOpac
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/ThemeContext';
 import { spacing, fontSizes, borderRadius } from '../../theme';
-import { getCurrentProgram, updateTrainingAge } from '../../services/storage';
+import { getCurrentProgram, updateTrainingAge, restartProgram } from '../../services/storage';
+import { useApp } from '../../context/AppContext';
 import { exportBackup, pickAndValidateBackup, restoreBackup } from '../../services/backup';
 import { TRAINING_AGE } from '../../data/splits';
 import { useWeightUnit } from '../../context/WeightUnitContext';
@@ -25,7 +26,9 @@ export default function SettingsScreen({ navigation }) {
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
   const [restoring, setRestoring] = useState(false);
+  const [restarting, setRestarting] = useState(false);
   const { isSubscribed, refresh } = useSubscription();
+  const { refreshProgram } = useApp();
 
   useEffect(() => {
     getCurrentProgram().then(p => {
@@ -95,6 +98,50 @@ export default function SettingsScreen({ navigation }) {
       Alert.alert('Restore failed', 'Could not reach the App Store. Please try again.');
     } else {
       Alert.alert('Nothing to restore', 'No active BPF Pro subscription was found for this Apple ID.');
+    }
+  }
+
+  function handleRestart() {
+    Alert.alert(
+      'Restart from week 1?',
+      "This deletes every logged workout, check-in and outside activity, and starts your program again at week 1. Custom exercises, progress photos and settings are kept.\n\nTip: export your data first if you might want it later.",
+      [
+        { text: 'Keep my current program', onPress: () => confirmRestart(true) },
+        { text: 'Choose a starter program', onPress: () => confirmRestart(false) },
+        { text: 'Cancel', style: 'cancel' },
+      ]
+    );
+  }
+
+  function confirmRestart(keepProgram) {
+    Alert.alert(
+      'Wipe all training data?',
+      (keepProgram
+        ? 'Your program stays exactly as you have it, including any edits.'
+        : "You'll go through setup again to pick a starter program. Your current program and its edits will be removed.") +
+        " This can't be undone.",
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Wipe & restart', style: 'destructive', onPress: () => doRestart(keepProgram) },
+      ]
+    );
+  }
+
+  async function doRestart(keepProgram) {
+    setRestarting(true);
+    try {
+      await restartProgram({ keepProgram });
+      // Without a program the root navigator switches to onboarding on refresh.
+      await refreshProgram();
+      if (keepProgram) {
+        setRestarting(false);
+        Alert.alert('Program restarted', "You're back at week 1. Good luck!");
+        navigation.goBack();
+      }
+    } catch (e) {
+      console.error('restartProgram error:', e);
+      setRestarting(false);
+      Alert.alert('Restart failed', 'Could not restart your program. Please try again.');
     }
   }
 
@@ -219,6 +266,22 @@ export default function SettingsScreen({ navigation }) {
         </View>
 
         <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Start over</Text>
+          <TouchableOpacity
+            style={[styles.row, styles.rowDanger]}
+            onPress={handleRestart}
+            activeOpacity={0.7}
+            disabled={restarting}
+          >
+            <View style={styles.rowLeft}>
+              <Text style={[styles.rowTitle, styles.rowTitleDanger]}>Restart program from week 1</Text>
+              <Text style={styles.rowSubtitle}>Wipes all logged workouts and training data</Text>
+            </View>
+            {restarting ? <ActivityIndicator color={colors.danger} /> : <Ionicons name="refresh" size={16} color={colors.danger} />}
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.section}>
           <Text style={styles.sectionLabel}>Subscription</Text>
           {isSubscribed ? (
             <TouchableOpacity style={styles.row} onPress={presentCustomerCenter} activeOpacity={0.7}>
@@ -312,6 +375,8 @@ const makeStyles = (colors) => StyleSheet.create({
     padding: spacing.md, borderWidth: 1, borderColor: colors.border,
   },
   rowSpaced: { marginBottom: spacing.sm },
+  rowDanger: { borderColor: colors.danger + '55' },
+  rowTitleDanger: { color: colors.danger },
   rowLeft: { flex: 1, marginRight: spacing.md },
   rowTitle: { fontSize: fontSizes.md, fontWeight: '600', color: colors.text },
   rowSubtitle: { fontSize: fontSizes.xs, color: colors.textSecondary, marginTop: 2 },

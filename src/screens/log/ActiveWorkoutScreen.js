@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   View, Text, StyleSheet, TextInput,
-  TouchableOpacity, SafeAreaView, Alert, KeyboardAvoidingView,
-  Platform, ActivityIndicator, Modal, FlatList, ScrollView,
+  TouchableOpacity, SafeAreaView, Alert,
+  ActivityIndicator, Modal, FlatList, ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import 'react-native-get-random-values';
@@ -19,6 +19,7 @@ import {
   clearDraftSession,
   getCustomExercises,
   getActivityLog,
+  getLastSessionNote,
 } from '../../services/storage';
 import { getWorkoutHeadsUp } from '../../services/activityLoad';
 import { getActivityLabel, INTENSITY_OPTIONS, REGION_BODY_WORDS } from '../../data/activities';
@@ -287,6 +288,8 @@ function ExercisePicker({ visible, exercises = [], onClose, onSelect, onCreateCu
           data={filtered}
           keyExtractor={item => item.id}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          automaticallyAdjustKeyboardInsets
           renderItem={({ item }) => (
             <TouchableOpacity
               onPress={() => { onSelect(item); onClose(); setQuery(''); }}
@@ -449,13 +452,16 @@ function ExerciseCard({
 
       {/* Notes field */}
       <View style={exStyles.notesSection}>
+        {previousData?.lastNote && (
+          <Text style={exStyles.lastNote}>
+            Last note · {relativeDateLabel(previousData.lastNote.date)}: {previousData.lastNote.text}
+          </Text>
+        )}
         <TextInput
           style={exStyles.notesInput}
           value={notes}
           onChangeText={onNotesChange}
-          placeholder={previousData?.notes
-            ? `Previous note: ${previousData.notes}`
-            : 'Add notes for this exercise...'}
+          placeholder="Add notes for this exercise..."
           placeholderTextColor={colors.textTertiary}
           multiline
           blurOnSubmit
@@ -560,6 +566,10 @@ const makeExStyles = (colors) => StyleSheet.create({
     minHeight: 36, maxHeight: 80,
     lineHeight: 20,
   },
+  lastNote: {
+    fontSize: fontSizes.xs, color: colors.textTertiary, fontStyle: 'italic',
+    lineHeight: 17, marginBottom: 4,
+  },
   discomfortSection: { borderTopWidth: 0.5, borderTopColor: colors.border, paddingTop: spacing.md },
   discomfortLabel: { fontSize: fontSizes.xs, fontWeight: '600', color: colors.textSecondary, marginBottom: spacing.sm },
   discomfortRow: { flexDirection: 'row', gap: spacing.sm },
@@ -591,6 +601,7 @@ export default function ActiveWorkoutScreen({ navigation, route }) {
   const [customExercises, setCustomExercises] = useState([]);
   const [showCreateCustom, setShowCreateCustom] = useState(false);
   const [headsUpActivity, setHeadsUpActivity] = useState(null);
+  const [lastSessionNote, setLastSessionNote] = useState(null);
 
   const allExercises = useMemo(
     () => [...exerciseLibrary, ...customExercises],
@@ -619,8 +630,13 @@ export default function ActiveWorkoutScreen({ navigation, route }) {
 
   useEffect(() => {
     async function load() {
-      const [custom, activities] = await Promise.all([getCustomExercises(), getActivityLog()]);
+      const [custom, activities, lastNote] = await Promise.all([
+        getCustomExercises(),
+        getActivityLog(),
+        getLastSessionNote(splitDay.dayLabel),
+      ]);
       setCustomExercises(custom);
+      setLastSessionNote(lastNote);
       const dayDefs = splitDay.exercises
         .map(e => [...exerciseLibrary, ...custom].find(def => def.id === e.exerciseId))
         .filter(Boolean);
@@ -922,10 +938,10 @@ export default function ActiveWorkoutScreen({ navigation, route }) {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
+      {/* No KeyboardAvoidingView: the ScrollView's keyboard insets handle inputs.
+          A screen-wide KAV could get stuck at full height after returning from
+          another app with a set input focused, collapsing the whole screen. */}
+      <View style={styles.flex}>
         <View style={styles.header}>
           <TouchableOpacity
             onPress={() => Alert.alert(
@@ -1041,6 +1057,11 @@ export default function ActiveWorkoutScreen({ navigation, route }) {
           {/* Session note */}
           <View style={styles.sessionNoteCard}>
             <Text style={styles.sessionNoteLabel}>Session note</Text>
+            {lastSessionNote && (
+              <Text style={styles.lastSessionNote}>
+                Last {splitDay.displayName || splitDay.dayLabel} · {relativeDateLabel(lastSessionNote.date)}: {lastSessionNote.text}
+              </Text>
+            )}
             <TextInput
               style={styles.sessionNoteInput}
               value={sessionNote}
@@ -1064,7 +1085,7 @@ export default function ActiveWorkoutScreen({ navigation, route }) {
             </Text>
           </TouchableOpacity>
         </ScrollView>
-      </KeyboardAvoidingView>
+      </View>
 
       <ExercisePicker
         visible={pickerMode !== null}
@@ -1155,6 +1176,10 @@ const makeStyles = (colors) => StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.8,
     marginBottom: spacing.sm,
+  },
+  lastSessionNote: {
+    fontSize: fontSizes.xs, color: colors.textTertiary, fontStyle: 'italic',
+    lineHeight: 17, marginBottom: spacing.xs,
   },
   sessionNoteInput: {
     fontSize: fontSizes.sm,

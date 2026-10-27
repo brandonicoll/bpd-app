@@ -175,6 +175,7 @@ export default function HistoryDetailScreen({ route, navigation }) {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets
       >
         <Text style={styles.dateText}>
           {weekdayShort(display.date)}, {month} {dayOfMonth(display.date)}

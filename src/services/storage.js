@@ -348,11 +348,17 @@ export async function getLastSessionsForExercises(exerciseIds) {
   const sorted = [...sessions].sort((a, b) => new Date(b.date) - new Date(a.date));
 
   const results = {};
+  // Most recent non-empty note per exercise — the last session may not have one.
+  const lastNotes = {};
   for (const session of sorted) {
-    if (Object.keys(results).length === exerciseIds.length) break;
+    if (
+      Object.keys(results).length === exerciseIds.length &&
+      Object.keys(lastNotes).length === exerciseIds.length
+    ) break;
     for (const exerciseData of session.exercises) {
       const id = exerciseData.exerciseId;
-      if (!results[id] && exerciseIds.includes(id)) {
+      if (!exerciseIds.includes(id)) continue;
+      if (!results[id]) {
         results[id] = {
           sets: exerciseData.sets,
           discomfortRating: exerciseData.discomfortRating,
@@ -360,9 +366,24 @@ export async function getLastSessionsForExercises(exerciseIds) {
           date: session.date,
         };
       }
+      if (!lastNotes[id] && exerciseData.notes?.trim()) {
+        lastNotes[id] = { text: exerciseData.notes.trim(), date: session.date };
+      }
     }
   }
+  for (const id of Object.keys(results)) {
+    results[id].lastNote = lastNotes[id] || null;
+  }
   return results;
+}
+
+// Most recent non-empty session note for a split day. Returns { text, date } or null.
+export async function getLastSessionNote(splitDayLabel) {
+  const sessions = await getAllSessions();
+  const last = sessions
+    .filter(s => s.splitDayLabel === splitDayLabel && s.note?.trim())
+    .sort((a, b) => new Date(b.date) - new Date(a.date))[0];
+  return last ? { text: last.note.trim(), date: last.date } : null;
 }
 
 // Get the most recent session that included a specific exercise
@@ -597,6 +618,41 @@ export async function changeProgramSplit({ splitType, daysPerWeek }) {
   };
 
   return saveCurrentProgram(merged);
+}
+
+// ─── Restart program ──────────────────────────────────────────
+// Everything that describes a training run. Custom exercises, library
+// overrides, progress photos and app settings survive a restart.
+const TRAINING_DATA_KEYS = [
+  KEYS.SESSIONS,
+  KEYS.WEEKLY_CHECKINS,
+  KEYS.STREAK,
+  KEYS.ADJUSTMENT_LOG,
+  KEYS.DRAFT_SESSION,
+  KEYS.ACTIVITY_LOG,
+];
+
+// Wipes all training data and starts again at week 1. keepProgram: true keeps
+// the current split days (including the user's edits); false clears the
+// program so the user re-onboards and picks a starter program.
+export async function restartProgram({ keepProgram }) {
+  const program = await getCurrentProgram();
+  await AsyncStorage.multiRemove(TRAINING_DATA_KEYS);
+
+  if (keepProgram && program) {
+    const now = new Date().toISOString();
+    return saveCurrentProgram({
+      ...program,
+      currentBlock: 1,
+      currentWeek: 1,
+      mesocycle: 1,
+      startDate: now,
+      weekStartedAt: now,
+    });
+  }
+
+  await AsyncStorage.multiRemove([KEYS.CURRENT_PROGRAM, KEYS.HAS_COMPLETED_ONBOARDING]);
+  return true;
 }
 
 // ─── Clear all data (dev/testing only) ────────────────────────

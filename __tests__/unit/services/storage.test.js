@@ -13,6 +13,12 @@ import {
   updateStreak,
   getStreak,
   calculateE1RM,
+  restartProgram,
+  getLastSessionsForExercises,
+  getLastSessionNote,
+  saveActivity,
+  getActivityLog,
+  KEYS,
 } from '../../../src/services/storage';
 import { makeProgram, makeSession, makeSets } from '../../helpers/factories';
 
@@ -230,5 +236,61 @@ describe('streak calculation', () => {
     await updateStreak({ weekStartDate: '2026-01-05', planned: 4 });
     await updateStreak({ weekStartDate: '2026-01-12', planned: 4 });
     expect((await getStreak()).longestStreak).toBe(2);
+  });
+});
+
+describe('restartProgram', () => {
+  async function seedTrainingRun() {
+    await saveCurrentProgram(makeProgram({ currentBlock: 3, currentWeek: 7, mesocycle: 2 }));
+    await swapExerciseInProgram('Upper A', 'incline_smith_press', 'flat_db_press');
+    await AsyncStorage.setItem(KEYS.HAS_COMPLETED_ONBOARDING, 'true');
+    await saveSession(makeSession('hack_squat', makeSets(100, 8), '2026-01-07T10:00:00.000Z'));
+    await saveActivity({ id: 'a1', date: '2026-01-08T10:00:00.000Z', type: 'running', region: 'lower', durationMinutes: 30, intensity: 2 });
+    await saveCustomExercise({ id: 'custom_1', name: 'My Press', jointActions: ['elbow_extension'], defaultRepRange: [8, 12] });
+  }
+
+  it('keeps the edited program but resets it to week 1 and wipes training data', async () => {
+    await seedTrainingRun();
+    await restartProgram({ keepProgram: true });
+
+    const program = await getCurrentProgram();
+    expect(program).toMatchObject({ currentBlock: 1, currentWeek: 1, mesocycle: 1 });
+    expect(program.splitDays[0].exercises[0].exerciseId).toBe('flat_db_press');
+    expect(await getAllSessions()).toEqual([]);
+    expect(await getActivityLog()).toEqual([]);
+    expect(await AsyncStorage.getItem(KEYS.HAS_COMPLETED_ONBOARDING)).toBe('true');
+    expect(await getCustomExercises()).toHaveLength(1);
+  });
+
+  it('clears the program and onboarding flag when choosing a starter program', async () => {
+    await seedTrainingRun();
+    await restartProgram({ keepProgram: false });
+
+    expect(await getCurrentProgram()).toBeNull();
+    expect(await AsyncStorage.getItem(KEYS.HAS_COMPLETED_ONBOARDING)).toBeNull();
+    expect(await getAllSessions()).toEqual([]);
+    expect(await getCustomExercises()).toHaveLength(1);
+  });
+});
+
+describe('previous notes', () => {
+  it('returns the most recent non-empty exercise note, even if the last session had none', async () => {
+    const older = makeSession('hack_squat', makeSets(100, 8), '2026-01-07T10:00:00.000Z');
+    older.exercises[0].notes = 'Feet higher on the platform';
+    const newer = makeSession('hack_squat', makeSets(102.5, 8), '2026-01-10T10:00:00.000Z');
+    await saveSession(older);
+    await saveSession(newer);
+
+    const result = (await getLastSessionsForExercises(['hack_squat'])).hack_squat;
+    expect(result.date).toBe('2026-01-10T10:00:00.000Z');
+    expect(result.lastNote).toEqual({ text: 'Feet higher on the platform', date: '2026-01-07T10:00:00.000Z' });
+  });
+
+  it('returns the last session note for the same split day only', async () => {
+    await saveSession({ ...makeSession('hack_squat', makeSets(100, 8), '2026-01-07T10:00:00.000Z'), splitDayLabel: 'Lower A', note: 'Knee felt good' });
+    await saveSession({ ...makeSession('incline_smith_press', makeSets(60, 8), '2026-01-09T10:00:00.000Z'), splitDayLabel: 'Upper A', note: 'Short on time' });
+
+    expect(await getLastSessionNote('Lower A')).toEqual({ text: 'Knee felt good', date: '2026-01-07T10:00:00.000Z' });
+    expect(await getLastSessionNote('Lower B')).toBeNull();
   });
 });
