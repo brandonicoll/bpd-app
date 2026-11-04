@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, SafeAreaView, ActivityIndicator,
   TouchableOpacity, TextInput, Alert, Platform,
@@ -96,24 +96,33 @@ export default function HistoryDetailScreen({ route, navigation }) {
     setEditedSession(null);
   }, []);
 
+  // Header buttons call through a ref so the header isn't rebuilt on every
+  // keystroke (handleSave changes whenever editedSession does).
+  const handleSaveRef = useRef(handleSave);
+  handleSaveRef.current = handleSave;
+
   useEffect(() => {
+    // Cancel and Save live in separate header slots: a single headerRight that
+    // grows from "Edit" to "Cancel  Save" isn't resized by the native header,
+    // which clipped the Save button off-screen.
     navigation.setOptions({
+      gestureEnabled: !isEditing,
+      headerLeft: isEditing ? () => (
+        <TouchableOpacity onPress={cancelEdit} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+          <Text style={{ fontSize: fontSizes.sm, color: colors.textSecondary, fontWeight: '600' }}>Cancel</Text>
+        </TouchableOpacity>
+      ) : undefined,
       headerRight: () => isEditing ? (
-        <View style={{ flexDirection: 'row', gap: spacing.lg }}>
-          <TouchableOpacity onPress={cancelEdit} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-            <Text style={{ fontSize: fontSizes.sm, color: colors.textSecondary, fontWeight: '600' }}>Cancel</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={handleSave} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-            <Text style={{ fontSize: fontSizes.sm, color: colors.primary, fontWeight: '700' }}>Save</Text>
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity onPress={() => handleSaveRef.current()} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+          <Text style={{ fontSize: fontSizes.sm, color: colors.primary, fontWeight: '700' }}>Save</Text>
+        </TouchableOpacity>
       ) : (
         <TouchableOpacity onPress={enterEdit} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
           <Text style={{ fontSize: fontSizes.sm, color: colors.primary, fontWeight: '600' }}>Edit</Text>
         </TouchableOpacity>
       ),
     });
-  }, [navigation, isEditing, handleSave, enterEdit, cancelEdit, colors]);
+  }, [navigation, isEditing, enterEdit, cancelEdit, colors]);
 
   function updateSet(exIndex, setIndex, field, value) {
     setEditedSession(prev => {
